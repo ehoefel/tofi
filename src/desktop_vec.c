@@ -75,6 +75,17 @@ void desktop_vec_add_file(struct desktop_vec *vec, const char *id, const char *p
 		goto cleanup_file;
 	}
 
+	char *icon = g_key_file_get_locale_string(file, group, "Icon", NULL, NULL);
+	if (icon == NULL) {
+    icon="󱀶";
+	}
+
+  char *displayname;
+  size_t sz;
+  sz = snprintf(NULL, 0, "%s %s", icon, name);
+  displayname = (char *)malloc(sz + 1);
+  snprintf(displayname, sz+1, "%s %s", icon, name);
+
 	/*
 	 * This is really a list rather than a string, but for the purposes of
 	 * matching against user input it's easier to just keep it as a string.
@@ -106,11 +117,12 @@ void desktop_vec_add_file(struct desktop_vec *vec, const char *id, const char *p
 		}
 	}
 
-	desktop_vec_add(vec, id, name, path, keywords);
+	desktop_vec_add(vec, id, displayname, path, keywords);
 
 cleanup_all:
 	free(keywords);
 	free(name);
+  free(displayname);
 cleanup_file:
 	g_key_file_unref(file);
 }
