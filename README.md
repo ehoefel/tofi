@@ -15,6 +15,6 @@ This readme will focus on this mod. For more information on the original project
 
  [x] Change default font to a Mono font (JetBrains Mono)
  [x] Add basic support for icons
+ [x] Change colors config syntax to HEX
  [ ] Add custom color for icons based on `.desktop` file information
- [ ] Change colors config syntax to HEX
  [ ] Add Comment from `.desktop` to line descriptors, right-padded

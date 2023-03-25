@@ -29,6 +29,7 @@
 #include "unicode.h"
 #include "viewporter.h"
 #include "xmalloc.h"
+#include "color.h"
 
 #undef MAX
 #undef MIN
@@ -1161,7 +1162,7 @@ int main(int argc, char *argv[])
 				.font_name = "JetBrains Mono",
 				.font_size = 24,
 				.prompt_text = "run: ",
-				.prompt_theme.foreground_color = {1.0f, 1.0f, 1.0f, 1.0f},
+				.prompt_theme.foreground_color = hex_to_color("#FFFFFF"),
 				.prompt_theme.foreground_specified = true,
 				.hidden_character_utf8 = u8"*",
 				.padding_top = 8,
@@ -1171,13 +1172,13 @@ int main(int argc, char *argv[])
 				.clip_to_padding = true,
 				.border_width = 12,
 				.outline_width = 4,
-				.background_color = {0.188f, 0.188f, 0.188f, 1.0f},
-				.foreground_color = {0.463f, 0.463f, 0.463f, 1.0f},
-				.border_color = {0.463f, 0.463f, 0.463f, 1.0f},
-				.outline_color = {0.149, 0.149, 0.149, 1.0f},
-				.placeholder_theme.foreground_color = {1.0f, 1.0f, 1.0f, 0.66f},
+				.background_color = hex_to_color("#303030"),
+				.foreground_color = hex_to_color("#767676"),
+				.border_color = hex_to_color("#767676"),
+				.outline_color = hex_to_color("#262626"),
+				.placeholder_theme.foreground_color = hex_to_color("#FFFFFF"),
 				.placeholder_theme.foreground_specified = true,
-				.selection_theme.foreground_color = {1.0f, 1.0f, 1.0f, 1.0f},
+				.selection_theme.foreground_color = hex_to_color("#FFFFFF"),
 				.selection_theme.foreground_specified = true,
 				.cursor_theme.thickness = 2
 			}
