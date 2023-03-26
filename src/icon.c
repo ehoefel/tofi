@@ -22,7 +22,7 @@ void icon_adjust(struct icon *restrict icon)
 {
   if (strcmp(icon->text, "") == 0) {
     icon->adjust_x = 2;
-    icon->adjust_y = 0;
+    icon->adjust_y = -3;
     icon_color_set(icon, "#E66000");
   } else if (strcmp(icon->text, "") == 0) {
     icon->adjust_x = 2;
@@ -38,7 +38,7 @@ void icon_adjust(struct icon *restrict icon)
     icon_color_set(icon, "#5fff5f");
   } else if (strcmp(icon->text, "󰇧") == 0) {
     icon->adjust_x = -1;
-    icon->adjust_y = 5;
+    icon->adjust_y = 6;
     icon_color_set(icon, "#1e89c6");
   } else if (strcmp(icon->text, "") == 0) {
     icon->adjust_x = 3;
@@ -50,7 +50,7 @@ void icon_adjust(struct icon *restrict icon)
     icon_color_set(icon, "#e2a464");
   } else if (strcmp(icon->text, "󰴸") == 0) {
     icon->adjust_x = 0;
-    icon->adjust_y = 4;
+    icon->adjust_y = 6;
     icon_color_set(icon, "#729fcf");
   } else if (strcmp(icon->text, "󰌨") == 0) {
     icon->adjust_x = 0;
