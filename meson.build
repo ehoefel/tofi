@@ -103,17 +103,19 @@ common_sources = files(
   'src/drun.c',
   'src/entry.c',
   'src/entry_backend/pango.c',
-  'src/entry_backend/harfbuzz.c',
   'src/fuzzy_match.c',
   'src/history.c',
+  'src/icon.c',
   'src/input.c',
   'src/lock.c',
   'src/log.c',
   'src/mkdirp.c',
+  'src/result.c',
   'src/scale.c',
   'src/shm.c',
   'src/string_vec.c',
   'src/surface.c',
+  'src/theme.c',
   'src/unicode.c',
   'src/xmalloc.c',
 )
@@ -122,8 +124,10 @@ compgen_sources = files(
   'src/main_compgen.c',
   'src/compgen.c',
   'src/fuzzy_match.c',
+  'src/icon.c',
   'src/log.c',
   'src/mkdirp.c',
+  'src/result.c',
   'src/string_vec.c',
   'src/unicode.c',
   'src/xmalloc.c'
@@ -135,7 +139,6 @@ libm = cc.find_library('m', required: false)
 # On systems where libc doesn't provide fts (i.e. musl) we require libfts
 libfts = cc.find_library('fts', required: not cc.has_function('fts_read'))
 freetype = dependency('freetype2')
-harfbuzz = dependency('harfbuzz')
 cairo = dependency('cairo')
 pangocairo = dependency('pangocairo')
 wayland_client = dependency('wayland-client')
@@ -151,21 +154,6 @@ if wayland_client.version().version_compare('<1.20.0')
     language: 'c'
     )
 endif
-
-if harfbuzz.version().version_compare('<4.0.0')
-  add_project_arguments(
-    ['-DNO_HARFBUZZ_METRIC_FALLBACK=1'],
-    language: 'c'
-    )
-endif
-
-if harfbuzz.version().version_compare('<4.4.0')
-  add_project_arguments(
-    ['-DNO_HARFBUZZ_FONT_CHANGED=1'],
-    language: 'c'
-    )
-endif
-
 
 
 # Generate the necessary Wayland headers / sources with wayland-scanner
@@ -204,7 +192,7 @@ subdir('test')
 executable(
   'tofi',
   files('src/main.c'), common_sources, wl_proto_src, wl_proto_headers,
-  dependencies: [librt, libm, libfts, freetype, harfbuzz, cairo, pangocairo, wayland_client, xkbcommon, glib, gio_unix],
+  dependencies: [librt, libm, libfts, freetype, cairo, pangocairo, wayland_client, xkbcommon, glib, gio_unix],
   install: true
 )
 

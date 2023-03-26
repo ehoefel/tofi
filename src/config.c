@@ -716,9 +716,6 @@ bool parse_option(struct tofi *tofi, const char *filename, size_t lineno, const 
 		snprintf(tofi->default_terminal, N_ELEM(tofi->default_terminal), "%s", value);
 	} else if (strcasecmp(option, "hint-font") == 0) {
 		bool val = !parse_bool(filename, lineno, value, &err);
-		if (!err) {
-			tofi->window.entry.harfbuzz.disable_hinting = val;
-		}
 	} else if (strcasecmp(option, "multi-instance") == 0) {
 		bool val = parse_bool(filename, lineno, value, &err);
 		if (!err) {

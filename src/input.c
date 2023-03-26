@@ -2,9 +2,11 @@
 #include <fcntl.h>
 #include <linux/input-event-codes.h>
 #include <unistd.h>
+#include "desktop_vec.h"
 #include "input.h"
 #include "log.h"
 #include "nelem.h"
+#include "result.h"
 #include "tofi.h"
 #include "unicode.h"
 
@@ -144,13 +146,13 @@ void add_character(struct tofi *tofi, xkb_keycode_t keycode)
 		entry->input_utf8_length += len;
 
 		if (entry->drun) {
-			struct string_ref_vec results = desktop_vec_filter(&entry->apps, entry->input_utf8, tofi->fuzzy_match);
-			string_ref_vec_destroy(&entry->results);
+			struct result_ref_vec results = desktop_vec_filter(&entry->apps, entry->input_utf8, tofi->fuzzy_match);
+			result_ref_vec_destroy(&entry->results);
 			entry->results = results;
 		} else {
-			struct string_ref_vec tmp = entry->results;
-			entry->results = string_ref_vec_filter(&entry->results, entry->input_utf8, tofi->fuzzy_match);
-			string_ref_vec_destroy(&tmp);
+//			struct string_ref_vec tmp = entry->results;
+//			entry->results = string_ref_vec_filter(&entry->results, entry->input_utf8, tofi->fuzzy_match);
+//			string_ref_vec_destroy(&tmp);
 		}
 
 		reset_selection(tofi);
@@ -180,11 +182,11 @@ void input_refresh_results(struct tofi *tofi)
 	}
 	entry->input_utf8[bytes_written] = '\0';
 	entry->input_utf8_length = bytes_written;
-	string_ref_vec_destroy(&entry->results);
+	result_ref_vec_destroy(&entry->results);
 	if (entry->drun) {
 		entry->results = desktop_vec_filter(&entry->apps, entry->input_utf8, tofi->fuzzy_match);
 	} else {
-		entry->results = string_ref_vec_filter(&entry->commands, entry->input_utf8, tofi->fuzzy_match);
+		//entry->results = string_ref_vec_filter(&entry->commands, entry->input_utf8, tofi->fuzzy_match);
 	}
 
 	reset_selection(tofi);

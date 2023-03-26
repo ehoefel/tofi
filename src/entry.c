@@ -181,7 +181,7 @@ void entry_init(struct entry *entry, uint8_t *restrict buffer, uint32_t width, u
 	if (entry->use_pango) {
 		entry_backend_pango_init(entry, &width, &height);
 	} else {
-		entry_backend_harfbuzz_init(entry, &width, &height);
+		//entry_backend_harfbuzz_init(entry, &width, &height);
 	}
 
         /*
@@ -220,7 +220,7 @@ void entry_init(struct entry *entry, uint8_t *restrict buffer, uint32_t width, u
 	if (entry->use_pango) {
 		entry_backend_pango_update(entry);
 	} else {
-		entry_backend_harfbuzz_update(entry);
+		//entry_backend_harfbuzz_update(entry);
 	}
 	entry->index = !entry->index;
 
@@ -256,7 +256,7 @@ void entry_destroy(struct entry *entry)
 	if (entry->use_pango) {
 		entry_backend_pango_destroy(entry);
 	} else {
-		entry_backend_harfbuzz_destroy(entry);
+		//entry_backend_harfbuzz_destroy(entry);
 	}
 	cairo_destroy(entry->cairo[0].cr);
 	cairo_destroy(entry->cairo[1].cr);
@@ -281,7 +281,7 @@ void entry_update(struct entry *entry)
 	if (entry->use_pango) {
 		entry_backend_pango_update(entry);
 	} else {
-		entry_backend_harfbuzz_update(entry);
+		//entry_backend_harfbuzz_update(entry);
 	}
 
 	log_debug("Finish rendering entry.\n");

@@ -69,3 +69,20 @@ struct color hex_to_color(const char *hex)
 		.a = (float)((val & 0x000000FFu) >> 0)  / 255.0f,
 	};
 }
+
+void color_copy(const struct color *a, struct color *b)
+{
+  b->r = a->r;
+  b->g = a->g;
+  b->b = a->b;
+  b->a = a->a;
+}
+
+void color_set_from_hex(struct color *b, const char *hex)
+{
+  log_debug("start\n");
+  struct color a = hex_to_color(hex);
+  log_debug("created color a\n");
+  color_copy(&a, b);
+  log_debug("copied color a\n");
+}

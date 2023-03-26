@@ -14,7 +14,6 @@
 #include <wayland-util.h>
 #include <xkbcommon/xkbcommon.h>
 #include "tofi.h"
-#include "compgen.h"
 #include "drun.h"
 #include "config.h"
 #include "entry.h"
@@ -22,9 +21,9 @@
 #include "log.h"
 #include "nelem.h"
 #include "lock.h"
+#include "result.h"
 #include "scale.h"
 #include "shm.h"
-#include "string_vec.h"
 #include "string_vec.h"
 #include "unicode.h"
 #include "viewporter.h"
@@ -1002,7 +1001,7 @@ static bool do_submit(struct tofi *tofi)
 {
 	struct entry *entry = &tofi->window.entry;
 	uint32_t selection = entry->selection + entry->first_result;
-	char *res = entry->results.buf[selection].string;
+	char *res = entry->results.buf[selection].result->name;
 
 	if (tofi->window.entry.results.count == 0) {
 		/* Always require a match in drun mode. */
@@ -1043,7 +1042,7 @@ static bool do_submit(struct tofi *tofi)
 	if (tofi->use_history) {
 		history_add(
 				&entry->history,
-				entry->results.buf[selection].string);
+				entry->results.buf[selection].result->name);
 		if (tofi->history_file[0] == 0) {
 			history_save_default_file(&entry->history, entry->drun);
 		} else {
@@ -1443,29 +1442,12 @@ int main(int argc, char *argv[])
 	 * If we were invoked as tofi-drun, generate the desktop app list.
 	 * Otherwise, just read standard input.
 	 */
-	if (strstr(argv[0], "-run")) {
-		log_debug("Generating command list.\n");
-		log_indent();
-		tofi.window.entry.command_buffer = compgen_cached();
-		struct string_ref_vec commands = string_ref_vec_from_buffer(tofi.window.entry.command_buffer);
-		if (tofi.use_history) {
-			if (tofi.history_file[0] == 0) {
-				tofi.window.entry.history = history_load_default_file(tofi.window.entry.drun);
-			} else {
-				tofi.window.entry.history = history_load(tofi.history_file);
-			}
-			tofi.window.entry.commands = compgen_history_sort(&commands, &tofi.window.entry.history);
-			string_ref_vec_destroy(&commands);
-		} else {
-			tofi.window.entry.commands = commands;
-		}
-		log_unindent();
-		log_debug("Command list generated.\n");
-	} else if (strstr(argv[0], "-drun")) {
+	if (strstr(argv[0], "-drun")) {
 		log_debug("Generating desktop app list.\n");
 		log_indent();
 		tofi.window.entry.drun = true;
-		struct desktop_vec apps = drun_generate_cached();
+		//struct desktop_vec apps = drun_generate_cached();
+		struct desktop_vec apps = drun_generate();
 		if (tofi.use_history) {
 			if (tofi.history_file[0] == 0) {
 				tofi.window.entry.history = history_load_default_file(tofi.window.entry.drun);
@@ -1476,30 +1458,30 @@ int main(int argc, char *argv[])
 				drun_history_sort(&apps, &tofi.window.entry.history);
 			}
 		}
-		struct string_ref_vec commands = string_ref_vec_create();
+		struct result_ref_vec commands = result_ref_vec_create();
 		for (size_t i = 0; i < apps.count; i++) {
-			string_ref_vec_add(&commands, apps.buf[i].name);
+			result_ref_vec_add_desktop(&commands, &apps.buf[i]);
 		}
 		tofi.window.entry.commands = commands;
 		tofi.window.entry.apps = apps;
 		log_unindent();
 		log_debug("App list generated.\n");
 	} else {
-		log_debug("Reading stdin.\n");
-		char *buf = read_stdin(!tofi.ascii_input);
-		tofi.window.entry.command_buffer = buf;
-		tofi.window.entry.commands = string_ref_vec_from_buffer(buf);
-		if (tofi.use_history) {
-			if (tofi.history_file[0] == 0) {
-				tofi.use_history = false;
-			} else {
-				tofi.window.entry.history = history_load(tofi.history_file);
-				string_ref_vec_history_sort(&tofi.window.entry.commands, &tofi.window.entry.history);
-			}
-		}
-		log_debug("Result list generated.\n");
+//		log_debug("Reading stdin.\n");
+//		char *buf = read_stdin(!tofi.ascii_input);
+//		tofi.window.entry.command_buffer = buf;
+//		tofi.window.entry.commands = string_ref_vec_from_buffer(buf);
+//		if (tofi.use_history) {
+//			if (tofi.history_file[0] == 0) {
+//				tofi.use_history = false;
+//			} else {
+//				tofi.window.entry.history = history_load(tofi.history_file);
+//				string_ref_vec_history_sort(&tofi.window.entry.commands, &tofi.window.entry.history);
+//			}
+//		}
+//		log_debug("Result list generated.\n");
 	}
-	tofi.window.entry.results = string_ref_vec_copy(&tofi.window.entry.commands);
+	tofi.window.entry.results = result_ref_vec_copy(&tofi.window.entry.commands);
 
 	/*
 	 * Next, we create the Wayland surface, which takes on the
@@ -1893,8 +1875,8 @@ int main(int argc, char *argv[])
 	if (tofi.window.entry.command_buffer != NULL) {
 		free(tofi.window.entry.command_buffer);
 	}
-	string_ref_vec_destroy(&tofi.window.entry.commands);
-	string_ref_vec_destroy(&tofi.window.entry.results);
+	result_ref_vec_destroy(&tofi.window.entry.commands);
+	result_ref_vec_destroy(&tofi.window.entry.results);
 	if (tofi.use_history) {
 		history_destroy(&tofi.window.entry.history);
 	}
