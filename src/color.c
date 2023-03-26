@@ -80,9 +80,17 @@ void color_copy(const struct color *a, struct color *b)
 
 void color_set_from_hex(struct color *b, const char *hex)
 {
-  log_debug("start\n");
   struct color a = hex_to_color(hex);
-  log_debug("created color a\n");
   color_copy(&a, b);
-  log_debug("copied color a\n");
+}
+
+struct color color_mix(struct color *a, struct color *b, float perc)
+{
+  struct color c = {
+    .r = a->r * (1-perc) + b->r * perc,
+    .g = a->g * (1-perc) + b->g * perc,
+    .b = a->b * (1-perc) + b->b * perc,
+    .a = a->a * (1-perc) + b->a * perc,
+  };
+  return c;
 }

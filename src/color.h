@@ -14,5 +14,6 @@ struct color {
 struct color hex_to_color(const char *hex);
 void color_copy(const struct color *a, struct color *b);
 void color_set_from_hex(struct color *color, const char *hex);
+struct color color_mix(struct color *a, struct color *b, float perc);
 
 #endif /* COLOR_H */

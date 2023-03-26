@@ -196,6 +196,7 @@ void entry_backend_pango_init(struct entry *entry, uint32_t *width, uint32_t *he
 				font_description,
 				entry->font_variations);
 	}
+  //pango_font_description_set_style(font_description, PANGO_STYLE_ITALIC);
 	pango_context_set_font_description(context, font_description);
 
 	entry->pango.layout = pango_layout_new(context);
@@ -384,14 +385,20 @@ void entry_backend_pango_update(struct entry *entry)
 			theme = &entry->default_result_theme;;
 		}
 
+
     struct text_theme theme_icon = {
-      .foreground_specified = true
+      .foreground_specified = true,
     };
 
     color_copy(&theme->foreground_color, &theme_icon.foreground_color);
 
     if (icon->color != NULL) {
       color_copy(icon->color, &theme_icon.foreground_color);
+    }
+
+		if (i != entry->selection) {
+      struct color mix = color_mix(&theme_icon.foreground_color, &entry->default_result_theme, 0.5);
+      color_copy(&mix, &theme_icon.foreground_color);
     }
 
 		if (entry->num_results > 0) {

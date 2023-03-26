@@ -188,7 +188,7 @@ void entry_init(struct entry *entry, uint8_t *restrict buffer, uint32_t width, u
 	 * Before we render any text, ensure all text themes are fully
 	 * specified.
 	 */
-        const struct text_theme default_theme = {
+  const struct text_theme default_theme = {
 		.foreground_color = entry->foreground_color,
 		.background_color = (struct color) { .a = 0 },
 		.padding = (struct directional) {0},
