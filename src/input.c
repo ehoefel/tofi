@@ -289,7 +289,10 @@ void select_previous_result(struct tofi *tofi)
 		return;
 	}
 
+  log_debug("selection is %zu\n", entry->selection);
 	uint32_t nsel = MAX(MIN(entry->num_results_drawn, entry->results.count), 1);
+  log_debug("nsel is %zu\n", nsel);
+  log_debug("entry->first_result is %zu\n", entry->first_result);
 
 	if (entry->first_result > nsel) {
 		entry->first_result -= entry->last_num_results_drawn;
@@ -297,7 +300,10 @@ void select_previous_result(struct tofi *tofi)
 	} else if (entry->first_result > 0) {
 		entry->selection = entry->first_result - 1;
 		entry->first_result = 0;
-	}
+	} else {
+		entry->selection = entry->num_results_drawn - 1;
+  }
+  log_debug("selection is %zu\n", entry->selection);
 }
 
 void select_next_result(struct tofi *tofi)
