@@ -1,13 +1,13 @@
 #include <cairo/cairo.h>
 #include <pango/pangocairo.h>
 #include <pango/pango.h>
-#include "../entry.h"
-#include "../icon.h"
-#include "../log.h"
-#include "../nelem.h"
-#include "../theme.h"
-#include "../unicode.h"
-#include "../xmalloc.h"
+#include "engine.h"
+#include "icon.h"
+#include "log.h"
+#include "nelem.h"
+#include "theme.h"
+#include "unicode.h"
+#include "xmalloc.h"
 
 #undef MAX
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -39,13 +39,13 @@ static void rounded_rectangle(cairo_t *cr, uint32_t width, uint32_t height, uint
 
 static void render_text_themed(
 		cairo_t *cr,
-		struct entry *entry,
+		struct engine *engine,
 		const char *text,
 		const struct text_theme *theme,
 		PangoRectangle *ink_rect,
 		PangoRectangle *logical_rect)
 {
-	PangoLayout *layout = entry->pango.layout;
+	PangoLayout *layout = engine->pango.layout;
 	struct color color = theme->foreground_color;
 	cairo_set_source_rgba(cr, color.r, color.g, color.b, color.a);
 
@@ -177,9 +177,9 @@ static void render_input(
 	cairo_restore(cr);
 }
 
-void entry_backend_pango_init(struct entry *entry, uint32_t *width, uint32_t *height)
+void pango_init(struct engine *engine, uint32_t *width, uint32_t *height)
 {
-	cairo_t *cr = entry->cairo[0].cr;
+	cairo_t *cr = engine->cairo[0].cr;
 
 	/* Setup Pango. */
 	log_debug("Creating Pango context.\n");
@@ -187,26 +187,26 @@ void entry_backend_pango_init(struct entry *entry, uint32_t *width, uint32_t *he
 
 	log_debug("Creating Pango font description.\n");
 	PangoFontDescription *font_description =
-		pango_font_description_from_string(entry->font_name);
+		pango_font_description_from_string(engine->font_name);
 	pango_font_description_set_size(
 			font_description,
-			entry->font_size * PANGO_SCALE);
-	if (entry->font_variations[0] != 0) {
+			engine->font_size * PANGO_SCALE);
+	if (engine->font_variations[0] != 0) {
 		pango_font_description_set_variations(
 				font_description,
-				entry->font_variations);
+				engine->font_variations);
 	}
   //pango_font_description_set_style(font_description, PANGO_STYLE_ITALIC);
 	pango_context_set_font_description(context, font_description);
 
-	entry->pango.layout = pango_layout_new(context);
+	engine->pango.layout = pango_layout_new(context);
 
-	if (entry->font_features[0] != 0) {
+	if (engine->font_features[0] != 0) {
 		log_debug("Setting font features.\n");
-		PangoAttribute *attr = pango_attr_font_features_new(entry->font_features);
+		PangoAttribute *attr = pango_attr_font_features_new(engine->font_features);
 		PangoAttrList *attr_list = pango_attr_list_new();
 		pango_attr_list_insert(attr_list, attr);
-		pango_layout_set_attributes(entry->pango.layout, attr_list);
+		pango_layout_set_attributes(engine->pango.layout, attr_list);
 	}
 
 	log_debug("Loading Pango font.\n");
@@ -217,18 +217,18 @@ void entry_backend_pango_init(struct entry *entry, uint32_t *width, uint32_t *he
 
 	uint32_t m_codepoint;
 	if (hb_font_get_glyph_from_name(hb_font, "m", -1, &m_codepoint)) {
-		entry->cursor_theme.em_width = (double)hb_font_get_glyph_h_advance(hb_font, m_codepoint) / PANGO_SCALE;
+		engine->cursor_theme.em_width = (double)hb_font_get_glyph_h_advance(hb_font, m_codepoint) / PANGO_SCALE;
 	} else {
-		entry->cursor_theme.em_width = (double)pango_font_metrics_get_approximate_char_width(metrics) / PANGO_SCALE;
+		engine->cursor_theme.em_width = (double)pango_font_metrics_get_approximate_char_width(metrics) / PANGO_SCALE;
 	}
 
-	entry->cursor_theme.underline_depth = (double)
+	engine->cursor_theme.underline_depth = (double)
 		(
 		 pango_font_metrics_get_ascent(metrics)
 		 - pango_font_metrics_get_underline_position(metrics)
 		) / PANGO_SCALE;
-	if (entry->cursor_theme.style == CURSOR_STYLE_UNDERSCORE && !entry->cursor_theme.thickness_specified) {
-		entry->cursor_theme.thickness = pango_font_metrics_get_underline_thickness(metrics) / PANGO_SCALE;
+	if (engine->cursor_theme.style == CURSOR_STYLE_UNDERSCORE && !engine->cursor_theme.thickness_specified) {
+		engine->cursor_theme.thickness = pango_font_metrics_get_underline_thickness(metrics) / PANGO_SCALE;
 	}
 
 	pango_font_metrics_unref(metrics);
@@ -237,26 +237,26 @@ void entry_backend_pango_init(struct entry *entry, uint32_t *width, uint32_t *he
 
 	pango_font_description_free(font_description);
 
-	entry->pango.context = context;
+	engine->pango.context = context;
 }
 
-void entry_backend_pango_destroy(struct entry *entry)
+void pango_destroy(struct engine *engine)
 {
-	g_object_unref(entry->pango.layout);
-	g_object_unref(entry->pango.context);
+	g_object_unref(engine->pango.layout);
+	g_object_unref(engine->pango.context);
 }
 
-static bool size_overflows(struct entry *entry, uint32_t width, uint32_t height)
+static bool size_overflows(struct engine *engine, uint32_t width, uint32_t height)
 {
-	cairo_t *cr = entry->cairo[entry->index].cr;
+	cairo_t *cr = engine->cairo[engine->index].cr;
 	cairo_matrix_t mat;
 	cairo_get_matrix(cr, &mat);
-	if (entry->horizontal) {
-		if (mat.x0 + width > entry->clip_x + entry->clip_width) {
+	if (engine->horizontal) {
+		if (mat.x0 + width > engine->clip_x + engine->clip_width) {
 			return true;
 		}
 	} else {
-		if (mat.y0 + height > entry->clip_y + entry->clip_height) {
+		if (mat.y0 + height > engine->clip_y + engine->clip_height) {
 			return true;
 		}
 	}
@@ -269,40 +269,40 @@ static bool size_overflows(struct entry *entry, uint32_t width, uint32_t height)
  * more explanatory comments than there are here, so go look at that if you
  * want to understand how tofi's text rendering works.
  */
-void entry_backend_pango_update(struct entry *entry)
+void pango_update(struct engine *engine)
 {
-	cairo_t *cr = entry->cairo[entry->index].cr;
-	PangoLayout *layout = entry->pango.layout;
+	cairo_t *cr = engine->cairo[engine->index].cr;
+	PangoLayout *layout = engine->pango.layout;
 
 	cairo_save(cr);
 
 	/* Render the prompt */
 	PangoRectangle ink_rect;
 	PangoRectangle logical_rect;
-	render_text_themed(cr, entry, entry->prompt_text, &entry->prompt_theme, &ink_rect, &logical_rect);
+	render_text_themed(cr, engine, engine->prompt_text, &engine->prompt_theme, &ink_rect, &logical_rect);
 
 	cairo_translate(cr, logical_rect.width + logical_rect.x, 0);
-	cairo_translate(cr, entry->prompt_padding, 0);
+	cairo_translate(cr, engine->prompt_padding, 0);
 
-	/* Render the entry text */
-	if (entry->input_utf8_length == 0) {
+	/* Render the engine text */
+	if (engine->input_utf8_length == 0) {
 		render_input(
 				cr,
 				layout,
-				entry->placeholder_text,
-				utf8_strlen(entry->placeholder_text),
-				&entry->placeholder_theme,
+				engine->placeholder_text,
+				utf8_strlen(engine->placeholder_text),
+				&engine->placeholder_theme,
 				0,
-				&entry->cursor_theme,
+				&engine->cursor_theme,
 				&ink_rect,
 				&logical_rect);
-	} else if (entry->hide_input) {
-		size_t nchars = entry->input_utf32_length;
-		size_t char_size = entry->hidden_character_utf8_length;
+	} else if (engine->hide_input) {
+		size_t nchars = engine->input_utf32_length;
+		size_t char_size = engine->hidden_character_utf8_length;
 		char *buf = xmalloc(1 + nchars * char_size);
 		for (size_t i = 0; i < nchars; i++) {
 			for (size_t j = 0; j < char_size; j++) {
-				buf[i * char_size + j] = entry->hidden_character_utf8[j];
+				buf[i * char_size + j] = engine->hidden_character_utf8[j];
 			}
 		}
 		buf[char_size * nchars] = '\0';
@@ -311,10 +311,10 @@ void entry_backend_pango_update(struct entry *entry)
 				cr,
 				layout,
 				buf,
-				entry->input_utf32_length,
-				&entry->input_theme,
-				entry->cursor_position,
-				&entry->cursor_theme,
+				engine->input_utf32_length,
+				&engine->input_theme,
+				engine->cursor_position,
+				&engine->cursor_theme,
 				&ink_rect,
 				&logical_rect);
 		free(buf);
@@ -322,67 +322,67 @@ void entry_backend_pango_update(struct entry *entry)
 		render_input(
 				cr,
 				layout,
-				entry->input_utf8,
-				entry->input_utf32_length,
-				&entry->input_theme,
-				entry->cursor_position,
-				&entry->cursor_theme,
+				engine->input_utf8,
+				engine->input_utf32_length,
+				&engine->input_theme,
+				engine->cursor_position,
+				&engine->cursor_theme,
 				&ink_rect,
 				&logical_rect);
 	}
-	logical_rect.width = MAX(logical_rect.width, (int)entry->input_width);
+	logical_rect.width = MAX(logical_rect.width, (int)engine->input_width);
 
-	struct color color = entry->foreground_color;
+	struct color color = engine->foreground_color;
 	cairo_set_source_rgba(cr, color.r, color.g, color.b, color.a);
 
 	uint32_t num_results;
-	if (entry->num_results == 0) {
-		num_results = entry->results.count;
+	if (engine->num_results == 0) {
+		num_results = engine->results.count;
 	} else {
-		num_results = MIN(entry->num_results, entry->results.count);
+		num_results = MIN(engine->num_results, engine->results.count);
 	}
 	/* Render our results */
 	size_t i;
 	for (i = 0; i < num_results; i++) {
-		if (entry->horizontal) {
-			cairo_translate(cr, logical_rect.x + logical_rect.width + entry->result_spacing, 0);
+		if (engine->horizontal) {
+			cairo_translate(cr, logical_rect.x + logical_rect.width + engine->result_spacing, 0);
 		} else {
-			cairo_translate(cr, 0, char_height + entry->result_spacing);
+			cairo_translate(cr, 0, char_height + engine->result_spacing);
 		}
-		if (entry->num_results == 0) {
-			if (size_overflows(entry, 0, 0)) {
+		if (engine->num_results == 0) {
+			if (size_overflows(engine, 0, 0)) {
 				break;
 			}
-		} else if (i >= entry->num_results) {
+		} else if (i >= engine->num_results) {
 			break;
 		}
-		size_t index = i + entry->first_result;
+		size_t index = i + engine->first_result;
 		/*
 		 * We may be on the last page, which could have fewer results
 		 * than expected, so check and break if necessary.
 		 */
-		if (index >= entry->results.count) {
+		if (index >= engine->results.count) {
 			break;
 		}
 
 		const char *name, *comment;
     const struct icon *icon;
-		if (i < entry->results.count) {
-			icon = entry->results.buf[index].result->icon;
-			name = entry->results.buf[index].result->name;
-			comment = entry->results.buf[index].result->comment;
+		if (i < engine->results.count) {
+			icon = engine->results.buf[index].result->icon;
+			name = engine->results.buf[index].result->name;
+			comment = engine->results.buf[index].result->comment;
 		} else {
 			name = "";
 			comment = "";
 		}
 
 		const struct text_theme *theme;
-		if (i == entry->selection) {
-			theme = &entry->selection_theme;
+		if (i == engine->selection) {
+			theme = &engine->selection_theme;
 		} else if (index % 2) {
-			theme = &entry->alternate_result_theme;;
+			theme = &engine->alternate_result_theme;;
 		} else {
-			theme = &entry->default_result_theme;;
+			theme = &engine->default_result_theme;;
 		}
 
 
@@ -396,17 +396,17 @@ void entry_backend_pango_update(struct entry *entry)
       color_copy(icon->color, &theme_icon.foreground_color);
     }
 
-		if (i != entry->selection) {
-      struct color mix = color_mix(&theme_icon.foreground_color, &entry->default_result_theme, 0.5);
+		if (i != engine->selection) {
+      struct color mix = color_mix(&theme_icon.foreground_color, &engine->default_result_theme, 0.5);
       color_copy(&mix, &theme_icon.foreground_color);
     }
 
-		if (entry->num_results > 0) {
-			render_text_themed(cr, entry, name, theme, &ink_rect, &logical_rect);
-		} else if (!entry->horizontal) {
+		if (engine->num_results > 0) {
+			render_text_themed(cr, engine, name, theme, &ink_rect, &logical_rect);
+		} else if (!engine->horizontal) {
 
-			if (size_overflows(entry, 0, logical_rect.height)) {
-				entry->num_results_drawn = i;
+			if (size_overflows(engine, 0, logical_rect.height)) {
+				engine->num_results_drawn = i;
 				break;
 			}
 
@@ -467,22 +467,22 @@ void entry_backend_pango_update(struct entry *entry)
 
       if (icon) {
         cairo_translate(cr, icon->adjust_x, icon->adjust_y);
-        render_text_themed(cr, entry, icon->text, &theme_icon, &ink_rect, &logical_rect);
+        render_text_themed(cr, engine, icon->text, &theme_icon, &ink_rect, &logical_rect);
         cairo_translate(cr, -icon->adjust_x, -icon->adjust_y);
       }
 
-      dist_x = logical_rect.x + entry->result_spacing + padding;
+      dist_x = logical_rect.x + engine->result_spacing + padding;
 			cairo_translate(cr, dist_x, 0);
-			render_text_themed(cr, entry, name, theme, &ink_rect, &logical_rect);
+			render_text_themed(cr, engine, name, theme, &ink_rect, &logical_rect);
 			cairo_translate(cr, -dist_x, 0);
 		} else {
       log_debug("Enter C\n");
 			cairo_push_group(cr);
-			render_text_themed(cr, entry, name, theme, &ink_rect, &logical_rect);
+			render_text_themed(cr, engine, name, theme, &ink_rect, &logical_rect);
 
 			cairo_pattern_t *group = cairo_pop_group(cr);
-			if (size_overflows(entry, logical_rect.width, 0)) {
-				entry->num_results_drawn = i;
+			if (size_overflows(engine, logical_rect.width, 0)) {
+				engine->num_results_drawn = i;
 				cairo_pattern_destroy(group);
 				break;
 			} else {
@@ -494,7 +494,7 @@ void entry_backend_pango_update(struct entry *entry)
 			}
 		}
 	}
-	entry->num_results_drawn = i;
+	engine->num_results_drawn = i;
 	log_debug("Drew %zu results.\n", i);
 
 	cairo_restore(cr);

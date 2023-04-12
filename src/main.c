@@ -16,7 +16,7 @@
 #include "tofi.h"
 #include "drun.h"
 #include "config.h"
-#include "entry.h"
+#include "engine.h"
 #include "input.h"
 #include "log.h"
 #include "nelem.h"
@@ -29,6 +29,49 @@
 #include "viewporter.h"
 #include "xmalloc.h"
 #include "color.h"
+
+#define ANCHOR_TOP_LEFT (\
+    ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP \
+    | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT \
+    )
+#define ANCHOR_TOP (\
+    ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP \
+    | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT \
+    | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT \
+    )
+#define ANCHOR_TOP_RIGHT (\
+    ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP \
+    | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT \
+    )
+#define ANCHOR_RIGHT (\
+    ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT \
+    | ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP \
+    | ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM \
+    )
+#define ANCHOR_BOTTOM_RIGHT (\
+    ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM \
+    | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT \
+    )
+#define ANCHOR_BOTTOM (\
+    ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM \
+    | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT \
+    | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT \
+    )
+#define ANCHOR_BOTTOM_LEFT (\
+    ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM \
+    | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT \
+    )
+#define ANCHOR_LEFT (\
+    ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT \
+    | ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP \
+    | ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM \
+    )
+#define ANCHOR_CENTER (\
+    ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP \
+    | ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM \
+    | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT \
+    | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT \
+    )
 
 #undef MAX
 #undef MIN
@@ -145,26 +188,21 @@ static void wl_keyboard_keymap(
 	char *map_shm = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
 	assert(map_shm != MAP_FAILED);
 
-	if (tofi->late_keyboard_init) {
-		log_debug("Delaying keyboard configuration.\n");
-		tofi->xkb_keymap_string = xstrdup(map_shm);
-	} else {
-		log_debug("Configuring keyboard.\n");
-		struct xkb_keymap *xkb_keymap = xkb_keymap_new_from_string(
-				tofi->xkb_context,
-				map_shm,
-				XKB_KEYMAP_FORMAT_TEXT_V1,
-				XKB_KEYMAP_COMPILE_NO_FLAGS);
-		munmap(map_shm, size);
-		close(fd);
+	log_debug("Configuring keyboard.\n");
+	struct xkb_keymap *xkb_keymap = xkb_keymap_new_from_string(
+			tofi->xkb_context,
+			map_shm,
+			XKB_KEYMAP_FORMAT_TEXT_V1,
+			XKB_KEYMAP_COMPILE_NO_FLAGS);
+	munmap(map_shm, size);
+	close(fd);
 
-		struct xkb_state *xkb_state = xkb_state_new(xkb_keymap);
-		xkb_keymap_unref(tofi->xkb_keymap);
-		xkb_state_unref(tofi->xkb_state);
-		tofi->xkb_keymap = xkb_keymap;
-		tofi->xkb_state = xkb_state;
-		log_debug("Keyboard configured.\n");
-	}
+	struct xkb_state *xkb_state = xkb_state_new(xkb_keymap);
+	xkb_keymap_unref(tofi->xkb_keymap);
+	xkb_state_unref(tofi->xkb_state);
+	tofi->xkb_keymap = xkb_keymap;
+	tofi->xkb_state = xkb_state;
+	log_debug("Keyboard configured.\n");
 	munmap(map_shm, size);
 	close(fd);
 }
@@ -820,209 +858,32 @@ static const struct wl_surface_listener dummy_surface_listener = {
 };
 
 
-static void usage(bool err)
-{
-	fprintf(err ? stderr : stdout, "%s",
-"Usage: tofi [options]\n"
-"\n"
-"Basic options:\n"
-"  -h, --help                           Print this message and exit.\n"
-"  -c, --config <path>                  Specify a config file.\n"
-"      --prompt-text <string>           Prompt text.\n"
-"      --width <px|%>                   Width of the window.\n"
-"      --height <px|%>                  Height of the window.\n"
-"      --output <name>                  Name of output to display window on.\n"
-"      --anchor <position>              Location on screen to anchor window.\n"
-"      --horizontal <true|false>        List results horizontally.\n"
-"      --fuzzy-match <true|false>       Use fuzzy matching for searching.\n"
-"\n"
-"All options listed in \"man 5 tofi\" are also accpted in the form \"--key=value\".\n"
-	);
-}
-
-/* Option parsing with getopt. */
-const struct option long_options[] = {
-	{"help", no_argument, NULL, 'h'},
-	{"config", required_argument, NULL, 'c'},
-	{"include", required_argument, NULL, 0},
-	{"anchor", required_argument, NULL, 0},
-	{"exclusive-zone", required_argument, NULL, 0},
-	{"background-color", required_argument, NULL, 0},
-	{"corner-radius", required_argument, NULL, 0},
-	{"font", required_argument, NULL, 0},
-	{"font-size", required_argument, NULL, 0},
-	{"font-features", required_argument, NULL, 0},
-	{"font-variations", required_argument, NULL, 0},
-	{"num-results", required_argument, NULL, 0},
-	{"selection-color", required_argument, NULL, 0},
-	{"selection-match-color", required_argument, NULL, 0},
-	{"selection-padding", required_argument, NULL, 0},
-	{"selection-background", required_argument, NULL, 0},
-	{"selection-background-padding", required_argument, NULL, 0},
-	{"selection-background-corner-radius", required_argument, NULL, 0},
-	{"outline-width", required_argument, NULL, 0},
-	{"outline-color", required_argument, NULL, 0},
-	{"text-cursor", required_argument, NULL, 0},
-	{"text-cursor-style", required_argument, NULL, 0},
-	{"text-cursor-color", required_argument, NULL, 0},
-	{"text-cursor-background", required_argument, NULL, 0},
-	{"text-cursor-corner-radius", required_argument, NULL, 0},
-	{"text-cursor-thickness", required_argument, NULL, 0},
-	{"prompt-text", required_argument, NULL, 0},
-	{"prompt-padding", required_argument, NULL, 0},
-	{"prompt-color", required_argument, NULL, 0},
-	{"prompt-background", required_argument, NULL, 0},
-	{"prompt-background-padding", required_argument, NULL, 0},
-	{"prompt-background-corner-radius", required_argument, NULL, 0},
-	{"placeholder-text", required_argument, NULL, 0},
-	{"placeholder-color", required_argument, NULL, 0},
-	{"placeholder-background", required_argument, NULL, 0},
-	{"placeholder-background-padding", required_argument, NULL, 0},
-	{"placeholder-background-corner-radius", required_argument, NULL, 0},
-	{"input-color", required_argument, NULL, 0},
-	{"input-background", required_argument, NULL, 0},
-	{"input-background-padding", required_argument, NULL, 0},
-	{"input-background-corner-radius", required_argument, NULL, 0},
-	{"default-result-color", required_argument, NULL, 0},
-	{"default-result-background", required_argument, NULL, 0},
-	{"default-result-background-padding", required_argument, NULL, 0},
-	{"default-result-background-corner-radius", required_argument, NULL, 0},
-	{"alternate-result-color", required_argument, NULL, 0},
-	{"alternate-result-background", required_argument, NULL, 0},
-	{"alternate-result-background-padding", required_argument, NULL, 0},
-	{"alternate-result-background-corner-radius", required_argument, NULL, 0},
-	{"result-spacing", required_argument, NULL, 0},
-	{"min-input-width", required_argument, NULL, 0},
-	{"border-width", required_argument, NULL, 0},
-	{"border-color", required_argument, NULL, 0},
-	{"text-color", required_argument, NULL, 0},
-	{"width", required_argument, NULL, 0},
-	{"height", required_argument, NULL, 0},
-	{"margin-top", required_argument, NULL, 0},
-	{"margin-bottom", required_argument, NULL, 0},
-	{"margin-left", required_argument, NULL, 0},
-	{"margin-right", required_argument, NULL, 0},
-	{"padding-top", required_argument, NULL, 0},
-	{"padding-bottom", required_argument, NULL, 0},
-	{"padding-left", required_argument, NULL, 0},
-	{"padding-right", required_argument, NULL, 0},
-	{"clip-to-padding", required_argument, NULL, 0},
-	{"horizontal", required_argument, NULL, 0},
-	{"hide-cursor", required_argument, NULL, 0},
-	{"history", required_argument, NULL, 0},
-	{"history-file", required_argument, NULL, 0},
-	{"fuzzy-match", required_argument, NULL, 0},
-	{"require-match", required_argument, NULL, 0},
-	{"hide-input", required_argument, NULL, 0},
-	{"hidden-character", required_argument, NULL, 0},
-	{"drun-launch", required_argument, NULL, 0},
-	{"drun-print-exec", required_argument, NULL, 0},
-	{"terminal", required_argument, NULL, 0},
-	{"hint-font", required_argument, NULL, 0},
-	{"multi-instance", required_argument, NULL, 0},
-	{"ascii-input", required_argument, NULL, 0},
-	{"output", required_argument, NULL, 0},
-	{"scale", required_argument, NULL, 0},
-	{"late-keyboard-init", optional_argument, NULL, 'k'},
-	{NULL, 0, NULL, 0}
-};
-const char *short_options = ":hc:";
-
-static void parse_args(struct tofi *tofi, int argc, char *argv[])
-{
-
-	bool load_default_config = true;
-	int option_index = 0;
-
-	/* Handle errors ourselves. */
-	opterr = 0;
-
-	/* First pass, just check for config file, help, and errors. */
-	optind = 1;
-	int opt = getopt_long(argc, argv, short_options, long_options, &option_index);
-	while (opt != -1) {
-		if (opt == 'h') {
-			usage(false);
-			exit(EXIT_SUCCESS);
-		} else if (opt == 'c') {
-			config_load(tofi, optarg);
-			load_default_config = false;
-		} else if (opt == ':') {
-			log_error("Option %s requires an argument.\n", argv[optind - 1]);
-			usage(true);
-			exit(EXIT_FAILURE);
-		} else if (opt == '?') {
-			if (optopt) {
-				log_error("Unknown option -%c.\n", optopt);
-			} else {
-				log_error("Unknown option %s.\n", argv[optind - 1]);
-			}
-			usage(true);
-			exit(EXIT_FAILURE);
-		}
-		opt = getopt_long(argc, argv, short_options, long_options, &option_index);
-	}
-	if (load_default_config) {
-		config_load(tofi, NULL);
-	}
-
-	/* Second pass, parse everything else. */
-	optind = 1;
-	opt = getopt_long(argc, argv, short_options, long_options, &option_index);
-	while (opt != -1) {
-		if (opt == 0) {
-			if (!config_apply(tofi, long_options[option_index].name, optarg)) {
-				exit(EXIT_FAILURE);
-			}
-		} else if (opt == 'k') {
-			/*
-			 * Backwards compatibility for --late-keyboard-init not
-			 * taking an argument.
-			 */
-			if (optarg) {
-				if (!config_apply(tofi, long_options[option_index].name, optarg)) {
-					exit(EXIT_FAILURE);
-				}
-			} else {
-				tofi->late_keyboard_init = true;
-			}
-		}
-		opt = getopt_long(argc, argv, short_options, long_options, &option_index);
-	}
-
-	if (optind < argc) {
-		log_error("Unexpected non-option argument '%s'.\n", argv[optind]);
-		usage(true);
-		exit(EXIT_FAILURE);
-	}
-}
-
 static bool do_submit(struct tofi *tofi)
 {
-	struct entry *entry = &tofi->window.entry;
-	uint32_t selection = entry->selection + entry->first_result;
-	char *res = entry->results.buf[selection].result->name;
+	struct engine *engine = &tofi->window.engine;
+	uint32_t selection = engine->selection + engine->first_result;
+	char *res = engine->results.buf[selection].result->name;
 
-	if (tofi->window.entry.results.count == 0) {
+	if (tofi->window.engine.results.count == 0) {
 		/* Always require a match in drun mode. */
-		if (tofi->require_match || entry->drun) {
+		if (tofi->require_match || engine->drun) {
 			return false;
 		} else {
-			printf("%s\n", entry->input_utf8);
+			printf("%s\n", engine->input_utf8);
 			return true;
 		}
 	}
 
-	if (entry->drun) {
+	if (engine->drun) {
 		/*
 		 * At this point, the list of apps is history sorted rather
 		 * than alphabetically sorted, so we can't use
 		 * desktop_vec_find_sorted().
 		 */
 		struct desktop_entry *app = NULL;
-		for (size_t i = 0; i < entry->apps.count; i++) {
-			if (!strcmp(res, entry->apps.buf[i].name)) {
-				app = &entry->apps.buf[i];
+		for (size_t i = 0; i < engine->apps.count; i++) {
+			if (!strcmp(res, engine->apps.buf[i].name)) {
+				app = &engine->apps.buf[i];
 				break;
 			}
 		}
@@ -1041,12 +902,12 @@ static bool do_submit(struct tofi *tofi)
 	}
 	if (tofi->use_history) {
 		history_add(
-				&entry->history,
-				entry->results.buf[selection].result->name);
+				&engine->history,
+				engine->results.buf[selection].result->name);
 		if (tofi->history_file[0] == 0) {
-			history_save_default_file(&entry->history, entry->drun);
+			history_save_default_file(&engine->history, engine->drun);
 		} else {
-			history_save(&entry->history, tofi->history_file);
+			history_save(&engine->history, tofi->history_file);
 		}
 	}
 	return true;
@@ -1054,23 +915,23 @@ static bool do_submit(struct tofi *tofi)
 
 static void read_clipboard(struct tofi *tofi)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct engine *engine = &tofi->window.engine;
 
 	/* Make a copy of any text after the cursor. */
 	uint32_t *end_text = NULL;
-	size_t end_text_length = entry->input_utf32_length - entry->cursor_position;
+	size_t end_text_length = engine->input_utf32_length - engine->cursor_position;
 	if (end_text_length > 0) {
-		end_text = xcalloc(end_text_length, sizeof(*entry->input_utf32));
+		end_text = xcalloc(end_text_length, sizeof(*engine->input_utf32));
 		memcpy(end_text,
-				&entry->input_utf32[entry->cursor_position],
-				end_text_length * sizeof(*entry->input_utf32));
+				&engine->input_utf32[engine->cursor_position],
+				end_text_length * sizeof(*engine->input_utf32));
 	}
 	/* Buffer for 4 UTF-8 bytes plus a null terminator. */
 	char buffer[5];
 	memset(buffer, 0, N_ELEM(buffer));
 	errno = 0;
 	bool eof = false;
-	while (entry->cursor_position < N_ELEM(entry->input_utf32)) {
+	while (engine->cursor_position < N_ELEM(engine->input_utf32)) {
 		for (size_t i = 0; i < 4; i++) {
 			/*
 			 * Read input 1 byte at a time. This is slow, but easy,
@@ -1108,8 +969,8 @@ static void read_clipboard(struct tofi *tofi)
 				log_error("Invalid UTF-8 character in clipboard: %s\n", buffer);
 				break;
 			} else {
-				entry->input_utf32[entry->cursor_position] = unichar;
-				entry->cursor_position++;
+				engine->input_utf32[engine->cursor_position] = unichar;
+				engine->cursor_position++;
 				break;
 			}
 		}
@@ -1118,20 +979,20 @@ static void read_clipboard(struct tofi *tofi)
 			break;
 		}
 	}
-	entry->input_utf32_length = entry->cursor_position;
+	engine->input_utf32_length = engine->cursor_position;
 
 	/* If there was any text after the cursor, re-insert it now. */
 	if (end_text != NULL) {
 		for (size_t i = 0; i < end_text_length; i++) {
-			if (entry->input_utf32_length == N_ELEM(entry->input_utf32)) {
+			if (engine->input_utf32_length == N_ELEM(engine->input_utf32)) {
 				break;
 			}
-			entry->input_utf32[entry->input_utf32_length] = end_text[i];
-			entry->input_utf32_length++;
+			engine->input_utf32[engine->input_utf32_length] = end_text[i];
+			engine->input_utf32_length++;
 		}
 		free(end_text);
 	}
-	entry->input_utf32[MIN(entry->input_utf32_length, N_ELEM(entry->input_utf32) - 1)] = U'\0';
+	engine->input_utf32[MIN(engine->input_utf32_length, N_ELEM(engine->input_utf32) - 1)] = U'\0';
 
 	clipboard_finish_paste(&tofi->clipboard);
 
@@ -1157,11 +1018,11 @@ int main(int argc, char *argv[])
 			.width = 1280,
 			.height = 720,
 			.exclusive_zone = -1,
-			.entry = {
-				.font_name = "JetBrains Mono",
+			.engine = {
+				.font_name = "jetbrains mono",
 				.font_size = 24,
 				.prompt_text = "run: ",
-				.prompt_theme.foreground_color = hex_to_color("#FFFFFF"),
+				.prompt_theme.foreground_color = hex_to_color("#ffffff"),
 				.prompt_theme.foreground_specified = true,
 				.hidden_character_utf8 = u8"*",
 				.padding_top = 8,
@@ -1175,17 +1036,14 @@ int main(int argc, char *argv[])
 				.foreground_color = hex_to_color("#767676"),
 				.border_color = hex_to_color("#767676"),
 				.outline_color = hex_to_color("#262626"),
-				.placeholder_theme.foreground_color = hex_to_color("#FFFFFF"),
+				.placeholder_theme.foreground_color = hex_to_color("#ffffff"),
 				.placeholder_theme.foreground_specified = true,
-				.selection_theme.foreground_color = hex_to_color("#FFFFFF"),
+				.selection_theme.foreground_color = hex_to_color("#ffffff"),
 				.selection_theme.foreground_specified = true,
 				.cursor_theme.thickness = 2
 			}
 		},
-		.anchor =  ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP
-			| ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM
-			| ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT
-			| ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT,
+		.anchor =  ANCHOR_CENTER,
 		.use_history = true,
 		.require_match = true,
 		.use_scale = true,
@@ -1199,7 +1057,6 @@ int main(int argc, char *argv[])
 				getenv("TERMINAL"));
 	}
 
-	parse_args(&tofi, argc, argv);
 	log_debug("Config done\n");
 
 	if (!tofi.multiple_instance && lock_check()) {
@@ -1221,13 +1078,11 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 	tofi.wl_registry = wl_display_get_registry(tofi.wl_display);
-	if (!tofi.late_keyboard_init) {
-		log_debug("Creating xkb context.\n");
-		tofi.xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-		if (tofi.xkb_context == NULL) {
-			log_error("Couldn't create an XKB context.\n");
-			exit(EXIT_FAILURE);
-		}
+	log_debug("Creating xkb context.\n");
+	tofi.xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+	if (tofi.xkb_context == NULL) {
+		log_error("Couldn't create an XKB context.\n");
+		exit(EXIT_FAILURE);
 	}
 	wl_registry_add_listener(
 			tofi.wl_registry,
@@ -1435,7 +1290,7 @@ int main(int argc, char *argv[])
 	 * We can now scale values and calculate any percentages, as we know
 	 * the output size and scale.
 	 */
-	config_fixup_values(&tofi);
+  config_apply(&tofi);
 
 	/*
 	 * If we were invoked as tofi-run, generate the command list.
@@ -1445,43 +1300,29 @@ int main(int argc, char *argv[])
 	if (strstr(argv[0], "-drun")) {
 		log_debug("Generating desktop app list.\n");
 		log_indent();
-		tofi.window.entry.drun = true;
+		tofi.window.engine.drun = true;
 		//struct desktop_vec apps = drun_generate_cached();
 		struct desktop_vec apps = drun_generate();
 		if (tofi.use_history) {
 			if (tofi.history_file[0] == 0) {
-				tofi.window.entry.history = history_load_default_file(tofi.window.entry.drun);
+				tofi.window.engine.history = history_load_default_file(tofi.window.engine.drun);
 			} else {
-				tofi.window.entry.history = history_load(tofi.history_file);
+				tofi.window.engine.history = history_load(tofi.history_file);
 			}
-			if (tofi.window.entry.drun) {
-				drun_history_sort(&apps, &tofi.window.entry.history);
+			if (tofi.window.engine.drun) {
+				drun_history_sort(&apps, &tofi.window.engine.history);
 			}
 		}
 		struct result_ref_vec commands = result_ref_vec_create();
 		for (size_t i = 0; i < apps.count; i++) {
 			result_ref_vec_add_desktop(&commands, &apps.buf[i]);
 		}
-		tofi.window.entry.commands = commands;
-		tofi.window.entry.apps = apps;
+		tofi.window.engine.commands = commands;
+		tofi.window.engine.apps = apps;
 		log_unindent();
 		log_debug("App list generated.\n");
-	} else {
-//		log_debug("Reading stdin.\n");
-//		char *buf = read_stdin(!tofi.ascii_input);
-//		tofi.window.entry.command_buffer = buf;
-//		tofi.window.entry.commands = string_ref_vec_from_buffer(buf);
-//		if (tofi.use_history) {
-//			if (tofi.history_file[0] == 0) {
-//				tofi.use_history = false;
-//			} else {
-//				tofi.window.entry.history = history_load(tofi.history_file);
-//				string_ref_vec_history_sort(&tofi.window.entry.commands, &tofi.window.entry.history);
-//			}
-//		}
-//		log_debug("Result list generated.\n");
 	}
-	tofi.window.entry.results = result_ref_vec_copy(&tofi.window.entry.commands);
+	tofi.window.engine.results = result_ref_vec_copy(&tofi.window.engine.commands);
 
 	/*
 	 * Next, we create the Wayland surface, which takes on the
@@ -1494,43 +1335,6 @@ int main(int argc, char *argv[])
 			tofi.window.surface.wl_surface,
 			&wl_surface_listener,
 			&tofi);
-	if (tofi.window.width == 0 || tofi.window.height == 0) {
-		/*
-		 * Workaround for compatibility with legacy behaviour.
-		 *
-		 * Before the fractional_scale protocol was released, there was
-		 * no way for a client to know whether a fractional scale
-		 * factor had been set, meaning percentage-based dimensions
-		 * were incorrect. As a workaround for full-size windows, we
-		 * allowed specifying 0 for the width / height, which caused
-		 * zwlr_layer_shell to tell us the correct size to use.
-		 *
-		 * To make fractional scaling work, we have to use
-		 * wp_viewporter, and no longer need to set the buffer scale.
-		 * However, viewporter doesn't allow specifying 0 for
-		 * destination width or height. As a workaround, if 0 size is
-		 * set, don't use viewporter, warn the user and set the buffer
-		 * scale here.
-		 */
-		log_warning("Width or height set to 0, disabling fractional scaling support.\n");
-		log_warning("If your compositor supports the fractional scale protocol, percentages are preferred.\n");
-		tofi.window.fractional_scale = 0;
-		wl_surface_set_buffer_scale(
-				tofi.window.surface.wl_surface,
-				tofi.window.scale);
-	} else if (tofi.wp_viewporter == NULL) {
-		/*
-		 * We also could be running on a Wayland compositor which
-		 * doesn't support wp_viewporter, in which case we need to use
-		 * the old scaling method.
-		 */
-		log_warning("Using an outdated compositor, "
-				"fractional scaling will not work properly.\n");
-		tofi.window.fractional_scale = 0;
-		wl_surface_set_buffer_scale(
-				tofi.window.surface.wl_surface,
-				tofi.window.scale);
-	}
 
 	/* Grab the first (and only remaining) output from our list. */
 	struct wl_output *wl_output;
@@ -1578,17 +1382,13 @@ int main(int argc, char *argv[])
 	/*
 	 * Set up a viewport for our surface, necessary for fractional scaling.
 	 */
-	if (tofi.wp_viewporter != NULL) {
-		tofi.window.wp_viewport = wp_viewporter_get_viewport(
-				tofi.wp_viewporter,
-				tofi.window.surface.wl_surface);
-		if (tofi.window.width > 0 && tofi.window.height > 0) {
-			wp_viewport_set_destination(
-					tofi.window.wp_viewport,
-					tofi.window.width,
-					tofi.window.height);
-		}
-	}
+	tofi.window.wp_viewport = wp_viewporter_get_viewport(
+			tofi.wp_viewporter,
+			tofi.window.surface.wl_surface);
+	wp_viewport_set_destination(
+			tofi.window.wp_viewport,
+			tofi.window.width,
+			tofi.window.height);
 
 	/* Commit the surface to finalise setup. */
 	wl_surface_commit(tofi.window.surface.wl_surface);
@@ -1619,7 +1419,7 @@ int main(int argc, char *argv[])
 
 	/*
 	 * Create the various structures for our window surface. This needs to
-	 * be done before calling entry_init as that performs some initial
+	 * be done before calling engine_init as that performs some initial
 	 * drawing, and surface_init allocates the buffers we'll be drawing to.
 	 */
 	log_debug("Initialising window surface.\n");
@@ -1629,7 +1429,7 @@ int main(int argc, char *argv[])
 	log_debug("Window surface initialised.\n");
 
 	/*
-	 * Initialise the structures for rendering the entry.
+	 * Initialise the structures for rendering the engine.
 	 * Cairo needs to know the size of the surface it's creating, and
 	 * there's no way to resize it aside from tearing everything down and
 	 * starting again, so we make sure to do this after we've determined
@@ -1654,8 +1454,8 @@ int main(int argc, char *argv[])
 				scale = tofi.window.scale * 120;
 			}
 		}
-		entry_init(
-				&tofi.window.entry,
+		engine_init(
+				&tofi.window.engine,
 				tofi.window.surface.shm_pool_data,
 				tofi.window.surface.width,
 				tofi.window.surface.height,
@@ -1668,7 +1468,7 @@ int main(int argc, char *argv[])
 	surface_draw(&tofi.window.surface);
 
 	/*
-	 * entry_init() left the second of the two buffers we use for
+	 * engine_init() left the second of the two buffers we use for
 	 * double-buffering unpainted to lower startup time, as described
 	 * there. Here, we flush our first, finished buffer to the screen, then
 	 * copy over the image to the second buffer before we need to use it in
@@ -1678,39 +1478,14 @@ int main(int argc, char *argv[])
 	wl_display_roundtrip(tofi.wl_display);
 	log_debug("Initialising second buffer.\n");
 	memcpy(
-		cairo_image_surface_get_data(tofi.window.entry.cairo[1].surface),
-		cairo_image_surface_get_data(tofi.window.entry.cairo[0].surface),
+		cairo_image_surface_get_data(tofi.window.engine.cairo[1].surface),
+		cairo_image_surface_get_data(tofi.window.engine.cairo[0].surface),
 		tofi.window.surface.width * tofi.window.surface.height * sizeof(uint32_t)
 	);
 	log_debug("Second buffer initialised.\n");
 
 	/* We've just rendered, so we don't need to do it again right now. */
 	tofi.window.surface.redraw = false;
-
-	/* If we delayed keyboard initialisation, do it now */
-	if (tofi.late_keyboard_init) {
-		log_debug("Creating xkb context.\n");
-		tofi.xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-		if (tofi.xkb_context == NULL) {
-			log_error("Couldn't create an XKB context.\n");
-			exit(EXIT_FAILURE);
-		}
-		log_debug("Configuring keyboard.\n");
-		struct xkb_keymap *xkb_keymap = xkb_keymap_new_from_string(
-				tofi.xkb_context,
-				tofi.xkb_keymap_string,
-				XKB_KEYMAP_FORMAT_TEXT_V1,
-				XKB_KEYMAP_COMPILE_NO_FLAGS);
-
-		struct xkb_state *xkb_state = xkb_state_new(xkb_keymap);
-		xkb_keymap_unref(tofi.xkb_keymap);
-		xkb_state_unref(tofi.xkb_state);
-		tofi.xkb_keymap = xkb_keymap;
-		tofi.xkb_state = xkb_state;
-		free(tofi.xkb_keymap_string);
-		tofi.late_keyboard_init = false;
-		log_debug("Keyboard configured.\n");
-	}
 
 	/*
 	 * Main event loop.
@@ -1806,7 +1581,7 @@ int main(int argc, char *argv[])
 		wl_display_dispatch_pending(tofi.wl_display);
 
 		if (tofi.window.surface.redraw) {
-			entry_update(&tofi.window.entry);
+			engine_update(&tofi.window.engine);
 			surface_draw(&tofi.window.surface);
 			tofi.window.surface.redraw = false;
 		}
@@ -1827,9 +1602,8 @@ int main(int argc, char *argv[])
 	 * mostly from Pango, and Cairo holds onto quite a bit of cached data
 	 * (without leaking it)
 	 */
-	log_debug("Window closed, performing cleanup.\n");
 	surface_destroy(&tofi.window.surface);
-	entry_destroy(&tofi.window.entry);
+	engine_destroy(&tofi.window.engine);
 	if (tofi.window.wp_viewport != NULL) {
 		wp_viewport_destroy(tofi.window.wp_viewport);
 	}
@@ -1870,16 +1644,16 @@ int main(int argc, char *argv[])
 	xkb_keymap_unref(tofi.xkb_keymap);
 	xkb_context_unref(tofi.xkb_context);
 	wl_registry_destroy(tofi.wl_registry);
-	if (tofi.window.entry.drun) {
-		desktop_vec_destroy(&tofi.window.entry.apps);
+	if (tofi.window.engine.drun) {
+		desktop_vec_destroy(&tofi.window.engine.apps);
 	}
-	if (tofi.window.entry.command_buffer != NULL) {
-		free(tofi.window.entry.command_buffer);
+	if (tofi.window.engine.command_buffer != NULL) {
+		free(tofi.window.engine.command_buffer);
 	}
-	result_ref_vec_destroy(&tofi.window.entry.commands);
-	result_ref_vec_destroy(&tofi.window.entry.results);
+	result_ref_vec_destroy(&tofi.window.engine.commands);
+	result_ref_vec_destroy(&tofi.window.engine.results);
 	if (tofi.use_history) {
-		history_destroy(&tofi.window.entry.history);
+		history_destroy(&tofi.window.engine.history);
 	}
 #endif
 	/*

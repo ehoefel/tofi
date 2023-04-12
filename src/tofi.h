@@ -7,7 +7,7 @@
 #include <xkbcommon/xkbcommon.h>
 #include "clipboard.h"
 #include "color.h"
-#include "entry.h"
+#include "engine.h"
 #include "surface.h"
 #include "wlr-layer-shell-unstable-v1.h"
 #include "fractional-scale-v1.h"
@@ -61,7 +61,7 @@ struct tofi {
 		struct surface surface;
 		struct wp_viewport *wp_viewport;
 		struct zwlr_layer_surface_v1 *zwlr_layer_surface;
-		struct entry entry;
+		struct engine engine;
 		uint32_t width;
 		uint32_t height;
 		uint32_t scale;
@@ -94,7 +94,6 @@ struct tofi {
 	bool hide_cursor;
 	bool use_history;
 	bool use_scale;
-	bool late_keyboard_init;
 	bool drun_launch;
 	bool drun_print_exec;
 	bool fuzzy_match;

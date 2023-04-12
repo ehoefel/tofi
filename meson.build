@@ -21,17 +21,6 @@ if debug
   add_project_arguments('-DDEBUG', language : 'c')
 endif
 
-config_location = join_paths(
-  get_option('sysconfdir'),
-  'xdg',
-  'tofi'
-)
-
-install_data(
-  'doc/config',
-  install_dir: config_location
-)
-
 license_dir = join_paths(
   get_option('datadir'),
   'licenses',
@@ -41,42 +30,6 @@ license_dir = join_paths(
 install_data(
   'LICENSE',
   install_dir: license_dir
-)
-
-completion_location = join_paths(
-  get_option('prefix'),
-  get_option('datadir'),
-  'bash-completion',
-  'completions'
-)
-
-install_data(
-  'completions/tofi',
-  install_dir: completion_location
-)
-
-install_symlink(
-  'tofi-run',
-  install_dir: completion_location,
-  pointing_to: 'tofi',
-)
-
-install_symlink(
-  'tofi-drun',
-  install_dir: completion_location,
-  pointing_to: 'tofi',
-)
-
-install_symlink(
-  'tofi-run',
-  install_dir: get_option('bindir'),
-  pointing_to: 'tofi',
-)
-
-install_symlink(
-  'tofi-drun',
-  install_dir: get_option('bindir'),
-  pointing_to: 'tofi',
 )
 
 add_project_arguments(
@@ -97,12 +50,12 @@ add_project_arguments(
 common_sources = files(
   'src/clipboard.c',
   'src/color.c',
-  'src/compgen.c',
   'src/config.c',
+  'src/css.c',
   'src/desktop_vec.c',
   'src/drun.c',
-  'src/entry.c',
-  'src/entry_backend/pango.c',
+  'src/engine.c',
+  'src/pango.c',
   'src/fuzzy_match.c',
   'src/history.c',
   'src/icon.c',
@@ -118,19 +71,6 @@ common_sources = files(
   'src/theme.c',
   'src/unicode.c',
   'src/xmalloc.c',
-)
-
-compgen_sources = files(
-  'src/main_compgen.c',
-  'src/compgen.c',
-  'src/fuzzy_match.c',
-  'src/icon.c',
-  'src/log.c',
-  'src/mkdirp.c',
-  'src/result.c',
-  'src/string_vec.c',
-  'src/unicode.c',
-  'src/xmalloc.c'
 )
 
 cc = meson.get_compiler('c')
@@ -187,20 +127,11 @@ foreach proto : wl_proto_xml
     command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'])
 endforeach
 
-subdir('test')
-
 executable(
   'tofi',
   files('src/main.c'), common_sources, wl_proto_src, wl_proto_headers,
   dependencies: [librt, libm, libfts, freetype, cairo, pangocairo, wayland_client, xkbcommon, glib, gio_unix],
   install: true
-)
-
-executable(
-  'tofi-compgen',
-  compgen_sources,
-  dependencies: [glib],
-  install: false
 )
 
 scdoc = find_program('scdoc', required: get_option('man-pages'))

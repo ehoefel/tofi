@@ -1,7 +1,7 @@
 #include <cairo/cairo.h>
 #include <math.h>
 #include <unistd.h>
-#include "entry.h"
+#include "engine.h"
 #include "log.h"
 #include "nelem.h"
 #include "scale.h"
@@ -44,7 +44,7 @@ static void apply_text_theme_fallback(struct text_theme *theme, const struct tex
 	}
 }
 
-void entry_init(struct entry *entry, uint8_t *restrict buffer, uint32_t width, uint32_t height, uint32_t fractional_scale_numerator)
+void engine_init(struct engine *engine, uint8_t *restrict buffer, uint32_t width, uint32_t height, uint32_t fractional_scale_numerator)
 {
 	double scale = fractional_scale_numerator / 120.;
 	/*
@@ -70,18 +70,18 @@ void entry_init(struct entry *entry, uint8_t *restrict buffer, uint32_t width, u
 	cairo_surface_set_device_scale(surface, scale, scale);
 	cairo_t *cr = cairo_create(surface);
 
-	entry->cairo[0].surface = surface;
-	entry->cairo[0].cr = cr;
+	engine->cairo[0].surface = surface;
+	engine->cairo[0].cr = cr;
 
-	entry->cairo[1].surface = cairo_image_surface_create_for_data(
+	engine->cairo[1].surface = cairo_image_surface_create_for_data(
 			&buffer[width * height * sizeof(uint32_t)],
 			CAIRO_FORMAT_ARGB32,
 			width,
 			height,
 			width * sizeof(uint32_t)
 			);
-	cairo_surface_set_device_scale(entry->cairo[1].surface, scale, scale);
-	entry->cairo[1].cr = cairo_create(entry->cairo[1].surface);
+	cairo_surface_set_device_scale(engine->cairo[1].surface, scale, scale);
+	engine->cairo[1].cr = cairo_create(engine->cairo[1].surface);
 
 	/* If we're scaling with Cairo, remember to account for that here. */
 	width = scale_apply_inverse(width, fractional_scale_numerator);
@@ -89,27 +89,27 @@ void entry_init(struct entry *entry, uint8_t *restrict buffer, uint32_t width, u
 
 	log_debug("Drawing window.\n");
 	/* Draw the background */
-	struct color color = entry->background_color;
+	struct color color = engine->background_color;
 	cairo_set_source_rgba(cr, color.r, color.g, color.b, color.a);
 	cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
 	cairo_paint(cr);
 
 	/* Draw the border with outlines */
-	cairo_set_line_width(cr, 4 * entry->outline_width + 2 * entry->border_width);
-	rounded_rectangle(cr, width, height, entry->corner_radius);
+	cairo_set_line_width(cr, 4 * engine->outline_width + 2 * engine->border_width);
+	rounded_rectangle(cr, width, height, engine->corner_radius);
 
-	color = entry->outline_color;
+	color = engine->outline_color;
 	cairo_set_source_rgba(cr, color.r, color.g, color.b, color.a);
 	cairo_stroke_preserve(cr);
 
-	color = entry->border_color;
+	color = engine->border_color;
 	cairo_set_source_rgba(cr, color.r, color.g, color.b, color.a);
-	cairo_set_line_width(cr, 2 * entry->outline_width + 2 * entry->border_width);
+	cairo_set_line_width(cr, 2 * engine->outline_width + 2 * engine->border_width);
 	cairo_stroke_preserve(cr);
 
-	color = entry->outline_color;
+	color = engine->outline_color;
 	cairo_set_source_rgba(cr, color.r, color.g, color.b, color.a);
-	cairo_set_line_width(cr, 2 * entry->outline_width);
+	cairo_set_line_width(cr, 2 * engine->outline_width);
 	cairo_stroke_preserve(cr);
 
 	/* Clear the overdrawn bits outside of the rounded corners */
@@ -131,20 +131,20 @@ void entry_init(struct entry *entry, uint8_t *restrict buffer, uint32_t width, u
 
 
 	/* Move and clip following draws to be within this outline */
-	double dx = 2.0 * entry->outline_width + entry->border_width;
+	double dx = 2.0 * engine->outline_width + engine->border_width;
 	cairo_translate(cr, dx, dx);
 	width -= 2 * dx;
 	height -= 2 * dx;
 
 	/* If we're clipping to the padding, account for that as well here */
-	if (entry->clip_to_padding) {
-		cairo_translate(cr, entry->padding_left, entry->padding_top);
-		width -= entry->padding_left + entry->padding_right;
-		height -= entry->padding_top + entry->padding_bottom;
+	if (engine->clip_to_padding) {
+		cairo_translate(cr, engine->padding_left, engine->padding_top);
+		width -= engine->padding_left + engine->padding_right;
+		height -= engine->padding_top + engine->padding_bottom;
 	}
 
 	/* Account for rounded corners */
-	double inner_radius = (double)entry->corner_radius - dx;
+	double inner_radius = (double)engine->corner_radius - dx;
 	inner_radius = MAX(inner_radius, 0);
 
 	dx = ceil(inner_radius * (1.0 - 1.0 / M_SQRT2));
@@ -157,72 +157,57 @@ void entry_init(struct entry *entry, uint8_t *restrict buffer, uint32_t width, u
 	/* Store the clip rectangle width and height. */
 	cairo_matrix_t mat;
 	cairo_get_matrix(cr, &mat);
-	entry->clip_x = mat.x0;
-	entry->clip_y = mat.y0;
-	entry->clip_width = width;
-	entry->clip_height = height;
+	engine->clip_x = mat.x0;
+	engine->clip_y = mat.y0;
+	engine->clip_width = width;
+	engine->clip_height = height;
 
 	/*
 	 * If we're not clipping to the padding, we didn't account for it
 	 * before.
 	 */
-	if (!entry->clip_to_padding) {
-		cairo_translate(cr, entry->padding_left, entry->padding_top);
+	if (!engine->clip_to_padding) {
+		cairo_translate(cr, engine->padding_left, engine->padding_top);
 	}
 
 	/* Setup the backend. */
-	if (access(entry->font_name, R_OK) != 0) {
-		/*
-		 * We've been given a font name rather than path,
-		 * so fallback to Pango
-		 */
-		entry->use_pango = true;
-	}
-	if (entry->use_pango) {
-		entry_backend_pango_init(entry, &width, &height);
-	} else {
-		//entry_backend_harfbuzz_init(entry, &width, &height);
-	}
+	pango_init(engine, &width, &height);
 
         /*
 	 * Before we render any text, ensure all text themes are fully
 	 * specified.
 	 */
   const struct text_theme default_theme = {
-		.foreground_color = entry->foreground_color,
+		.foreground_color = engine->foreground_color,
 		.background_color = (struct color) { .a = 0 },
 		.padding = (struct directional) {0},
 		.background_corner_radius = 0
 	};
 
-	apply_text_theme_fallback(&entry->prompt_theme, &default_theme);
-	apply_text_theme_fallback(&entry->input_theme, &default_theme);
-	apply_text_theme_fallback(&entry->placeholder_theme, &default_theme);
-	apply_text_theme_fallback(&entry->default_result_theme, &default_theme);
-	apply_text_theme_fallback(&entry->alternate_result_theme, &entry->default_result_theme);
-	apply_text_theme_fallback(&entry->selection_theme, &default_theme);
+	apply_text_theme_fallback(&engine->prompt_theme, &default_theme);
+	apply_text_theme_fallback(&engine->input_theme, &default_theme);
+	apply_text_theme_fallback(&engine->placeholder_theme, &default_theme);
+	apply_text_theme_fallback(&engine->default_result_theme, &default_theme);
+	apply_text_theme_fallback(&engine->alternate_result_theme, &engine->default_result_theme);
+	apply_text_theme_fallback(&engine->selection_theme, &default_theme);
 
 	/* The cursor is a special case, as it just needs the input colours. */
-	if (!entry->cursor_theme.color_specified) {
-		entry->cursor_theme.color = entry->input_theme.foreground_color;
+	if (!engine->cursor_theme.color_specified) {
+		engine->cursor_theme.color = engine->input_theme.foreground_color;
 	}
-	if (!entry->cursor_theme.text_color_specified) {
-		entry->cursor_theme.text_color = entry->background_color;
+	if (!engine->cursor_theme.text_color_specified) {
+		engine->cursor_theme.text_color = engine->background_color;
 	}
 
 	/*
 	 * Perform an initial render of the text.
-	 * This is done here rather than by calling entry_update to avoid the
+	 * This is done here rather than by calling engine_update to avoid the
 	 * unnecessary cairo_paint() of the background for the first frame,
 	 * which can be slow for large (e.g. fullscreen) windows.
 	 */
 	log_debug("Initial text render.\n");
-	if (entry->use_pango) {
-		entry_backend_pango_update(entry);
-	} else {
-		//entry_backend_harfbuzz_update(entry);
-	}
-	entry->index = !entry->index;
+	pango_update(engine);
+	engine->index = !engine->index;
 
 	/*
 	 * To avoid performing all this drawing twice, we take a small
@@ -238,39 +223,35 @@ void entry_init(struct entry *entry, uint8_t *restrict buffer, uint32_t width, u
 	 * frame has been displayed on screen (and while the user is unlikely
 	 * to press another key for the <10ms it takes to memcpy).
 	 */
-	cairo_set_matrix(entry->cairo[1].cr, &mat);
-	cairo_rectangle(entry->cairo[1].cr, 0, 0, width, height);
-	cairo_clip(entry->cairo[1].cr);
+	cairo_set_matrix(engine->cairo[1].cr, &mat);
+	cairo_rectangle(engine->cairo[1].cr, 0, 0, width, height);
+	cairo_clip(engine->cairo[1].cr);
 
 	/*
 	 * If we're not clipping to the padding, the transformation matrix
 	 * didn't include it, so account for it here.
 	 */
-	if (!entry->clip_to_padding) {
-		cairo_translate(entry->cairo[1].cr, entry->padding_left, entry->padding_top);
+	if (!engine->clip_to_padding) {
+		cairo_translate(engine->cairo[1].cr, engine->padding_left, engine->padding_top);
 	}
 }
 
-void entry_destroy(struct entry *entry)
+void engine_destroy(struct engine *engine)
 {
-	if (entry->use_pango) {
-		entry_backend_pango_destroy(entry);
-	} else {
-		//entry_backend_harfbuzz_destroy(entry);
-	}
-	cairo_destroy(entry->cairo[0].cr);
-	cairo_destroy(entry->cairo[1].cr);
-	cairo_surface_destroy(entry->cairo[0].surface);
-	cairo_surface_destroy(entry->cairo[1].surface);
+	pango_destroy(engine);
+	cairo_destroy(engine->cairo[0].cr);
+	cairo_destroy(engine->cairo[1].cr);
+	cairo_surface_destroy(engine->cairo[0].surface);
+	cairo_surface_destroy(engine->cairo[1].surface);
 }
 
-void entry_update(struct entry *entry)
+void engine_update(struct engine *engine)
 {
-	log_debug("Start rendering entry.\n");
-	cairo_t *cr = entry->cairo[entry->index].cr;
+	log_debug("Start rendering engine.\n");
+	cairo_t *cr = engine->cairo[engine->index].cr;
 
 	/* Clear the image. */
-	struct color color = entry->background_color;
+	struct color color = engine->background_color;
 	cairo_set_source_rgba(cr, color.r, color.g, color.b, color.a);
 	cairo_save(cr);
 	cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
@@ -278,13 +259,9 @@ void entry_update(struct entry *entry)
 	cairo_restore(cr);
 
 	/* Draw our text. */
-	if (entry->use_pango) {
-		entry_backend_pango_update(entry);
-	} else {
-		//entry_backend_harfbuzz_update(entry);
-	}
+	pango_update(engine);
 
-	log_debug("Finish rendering entry.\n");
+	log_debug("Finish rendering engine.\n");
 
-	entry->index = !entry->index;
+	engine->index = !engine->index;
 }

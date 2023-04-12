@@ -116,16 +116,16 @@ void input_handle_keypress(struct tofi *tofi, xkb_keycode_t keycode)
 }
 
 void reset_selection(struct tofi *tofi) {
-	struct entry *entry = &tofi->window.entry;
-	entry->selection = 0;
-	entry->first_result = 0;
+	struct engine *engine = &tofi->window.engine;
+	engine->selection = 0;
+	engine->first_result = 0;
 }
 
 void add_character(struct tofi *tofi, xkb_keycode_t keycode)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct engine *engine = &tofi->window.engine;
 
-	if (entry->input_utf32_length >= N_ELEM(entry->input_utf32) - 1) {
+	if (engine->input_utf32_length >= N_ELEM(engine->input_utf32) - 1) {
 		/* No more room for input */
 		return;
 	}
@@ -136,57 +136,57 @@ void add_character(struct tofi *tofi, xkb_keycode_t keycode)
 			keycode,
 			buf,
 			sizeof(buf));
-	if (entry->cursor_position == entry->input_utf32_length) {
-		entry->input_utf32[entry->input_utf32_length] = utf8_to_utf32(buf);
-		entry->input_utf32_length++;
-		entry->input_utf32[entry->input_utf32_length] = U'\0';
-		memcpy(&entry->input_utf8[entry->input_utf8_length],
+	if (engine->cursor_position == engine->input_utf32_length) {
+		engine->input_utf32[engine->input_utf32_length] = utf8_to_utf32(buf);
+		engine->input_utf32_length++;
+		engine->input_utf32[engine->input_utf32_length] = U'\0';
+		memcpy(&engine->input_utf8[engine->input_utf8_length],
 				buf,
 				N_ELEM(buf));
-		entry->input_utf8_length += len;
+		engine->input_utf8_length += len;
 
-		if (entry->drun) {
-			struct result_ref_vec results = desktop_vec_filter(&entry->apps, entry->input_utf8, tofi->fuzzy_match);
-			result_ref_vec_destroy(&entry->results);
-			entry->results = results;
+		if (engine->drun) {
+			struct result_ref_vec results = desktop_vec_filter(&engine->apps, engine->input_utf8, tofi->fuzzy_match);
+			result_ref_vec_destroy(&engine->results);
+			engine->results = results;
 		} else {
-//			struct string_ref_vec tmp = entry->results;
-//			entry->results = string_ref_vec_filter(&entry->results, entry->input_utf8, tofi->fuzzy_match);
+//			struct string_ref_vec tmp = engine->results;
+//			engine->results = string_ref_vec_filter(&engine->results, engine->input_utf8, tofi->fuzzy_match);
 //			string_ref_vec_destroy(&tmp);
 		}
 
 		reset_selection(tofi);
 	} else {
-		for (size_t i = entry->input_utf32_length; i > entry->cursor_position; i--) {
-			entry->input_utf32[i] = entry->input_utf32[i - 1];
+		for (size_t i = engine->input_utf32_length; i > engine->cursor_position; i--) {
+			engine->input_utf32[i] = engine->input_utf32[i - 1];
 		}
-		entry->input_utf32[entry->cursor_position] = utf8_to_utf32(buf);
-		entry->input_utf32_length++;
-		entry->input_utf32[entry->input_utf32_length] = U'\0';
+		engine->input_utf32[engine->cursor_position] = utf8_to_utf32(buf);
+		engine->input_utf32_length++;
+		engine->input_utf32[engine->input_utf32_length] = U'\0';
 
 		input_refresh_results(tofi);
 	}
 
-	entry->cursor_position++;
+	engine->cursor_position++;
 }
 
 void input_refresh_results(struct tofi *tofi)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct engine *engine = &tofi->window.engine;
 
 	size_t bytes_written = 0;
-	for (size_t i = 0; i < entry->input_utf32_length; i++) {
+	for (size_t i = 0; i < engine->input_utf32_length; i++) {
 		bytes_written += utf32_to_utf8(
-				entry->input_utf32[i],
-				&entry->input_utf8[bytes_written]);
+				engine->input_utf32[i],
+				&engine->input_utf8[bytes_written]);
 	}
-	entry->input_utf8[bytes_written] = '\0';
-	entry->input_utf8_length = bytes_written;
-	result_ref_vec_destroy(&entry->results);
-	if (entry->drun) {
-		entry->results = desktop_vec_filter(&entry->apps, entry->input_utf8, tofi->fuzzy_match);
+	engine->input_utf8[bytes_written] = '\0';
+	engine->input_utf8_length = bytes_written;
+	result_ref_vec_destroy(&engine->results);
+	if (engine->drun) {
+		engine->results = desktop_vec_filter(&engine->apps, engine->input_utf8, tofi->fuzzy_match);
 	} else {
-		//entry->results = string_ref_vec_filter(&entry->commands, entry->input_utf8, tofi->fuzzy_match);
+		//engine->results = string_ref_vec_filter(&engine->commands, engine->input_utf8, tofi->fuzzy_match);
 	}
 
 	reset_selection(tofi);
@@ -194,26 +194,26 @@ void input_refresh_results(struct tofi *tofi)
 
 void delete_character(struct tofi *tofi)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct engine *engine = &tofi->window.engine;
 
-	if (entry->input_utf32_length == 0) {
+	if (engine->input_utf32_length == 0) {
 		/* No input to delete. */
 		return;
 	}
 
-	if (entry->cursor_position == 0) {
+	if (engine->cursor_position == 0) {
 		return;
-	} else if (entry->cursor_position == entry->input_utf32_length) {
-		entry->cursor_position--;
-		entry->input_utf32_length--;
-		entry->input_utf32[entry->input_utf32_length] = U'\0';
+	} else if (engine->cursor_position == engine->input_utf32_length) {
+		engine->cursor_position--;
+		engine->input_utf32_length--;
+		engine->input_utf32[engine->input_utf32_length] = U'\0';
 	} else {
-		for (size_t i = entry->cursor_position - 1; i < entry->input_utf32_length - 1; i++) {
-			entry->input_utf32[i] = entry->input_utf32[i + 1];
+		for (size_t i = engine->cursor_position - 1; i < engine->input_utf32_length - 1; i++) {
+			engine->input_utf32[i] = engine->input_utf32[i + 1];
 		}
-		entry->cursor_position--;
-		entry->input_utf32_length--;
-		entry->input_utf32[entry->input_utf32_length] = U'\0';
+		engine->cursor_position--;
+		engine->input_utf32_length--;
+		engine->input_utf32[engine->input_utf32_length] = U'\0';
 	}
 
 	input_refresh_results(tofi);
@@ -221,38 +221,38 @@ void delete_character(struct tofi *tofi)
 
 void delete_word(struct tofi *tofi)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct engine *engine = &tofi->window.engine;
 
-	if (entry->cursor_position == 0) {
+	if (engine->cursor_position == 0) {
 		/* No input to delete. */
 		return;
 	}
 
-	uint32_t new_cursor_pos = entry->cursor_position;
-	while (new_cursor_pos > 0 && utf32_isspace(entry->input_utf32[new_cursor_pos - 1])) {
+	uint32_t new_cursor_pos = engine->cursor_position;
+	while (new_cursor_pos > 0 && utf32_isspace(engine->input_utf32[new_cursor_pos - 1])) {
 		new_cursor_pos--;
 	}
-	while (new_cursor_pos > 0 && !utf32_isspace(entry->input_utf32[new_cursor_pos - 1])) {
+	while (new_cursor_pos > 0 && !utf32_isspace(engine->input_utf32[new_cursor_pos - 1])) {
 		new_cursor_pos--;
 	}
-	uint32_t new_length = entry->input_utf32_length - (entry->cursor_position - new_cursor_pos);
+	uint32_t new_length = engine->input_utf32_length - (engine->cursor_position - new_cursor_pos);
 	for (size_t i = 0; i < new_length; i++) {
-		entry->input_utf32[new_cursor_pos + i] = entry->input_utf32[entry->cursor_position + i];
+		engine->input_utf32[new_cursor_pos + i] = engine->input_utf32[engine->cursor_position + i];
 	}
-	entry->input_utf32_length = new_length;
-	entry->input_utf32[entry->input_utf32_length] = U'\0';
+	engine->input_utf32_length = new_length;
+	engine->input_utf32[engine->input_utf32_length] = U'\0';
 
-	entry->cursor_position = new_cursor_pos;
+	engine->cursor_position = new_cursor_pos;
 	input_refresh_results(tofi);
 }
 
 void clear_input(struct tofi *tofi)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct engine *engine = &tofi->window.engine;
 
-	entry->cursor_position = 0;
-	entry->input_utf32_length = 0;
-	entry->input_utf32[0] = U'\0';
+	engine->cursor_position = 0;
+	engine->input_utf32_length = 0;
+	engine->input_utf32[0] = U'\0';
 
 	input_refresh_results(tofi);
 }
@@ -282,53 +282,53 @@ void paste(struct tofi *tofi)
 
 void select_previous_result(struct tofi *tofi)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct engine *engine = &tofi->window.engine;
 
-	if (entry->selection > 0) {
-		entry->selection--;
+	if (engine->selection > 0) {
+		engine->selection--;
 		return;
 	}
 
-	uint32_t nsel = MAX(MIN(entry->num_results_drawn, entry->results.count), 1);
+	uint32_t nsel = MAX(MIN(engine->num_results_drawn, engine->results.count), 1);
 
-	if (entry->first_result > nsel) {
-		entry->first_result -= entry->last_num_results_drawn;
-		entry->selection = entry->last_num_results_drawn - 1;
-	} else if (entry->first_result > 0) {
-		entry->selection = entry->first_result - 1;
-		entry->first_result = 0;
+	if (engine->first_result > nsel) {
+		engine->first_result -= engine->last_num_results_drawn;
+		engine->selection = engine->last_num_results_drawn - 1;
+	} else if (engine->first_result > 0) {
+		engine->selection = engine->first_result - 1;
+		engine->first_result = 0;
 	} else {
-		entry->selection = entry->num_results_drawn - 1;
+		engine->selection = engine->num_results_drawn - 1;
   }
 }
 
 void select_next_result(struct tofi *tofi)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct engine *engine = &tofi->window.engine;
 
-	uint32_t nsel = MAX(MIN(entry->num_results_drawn, entry->results.count), 1);
+	uint32_t nsel = MAX(MIN(engine->num_results_drawn, engine->results.count), 1);
 
-	entry->selection++;
-	if (entry->selection >= nsel) {
-		entry->selection -= nsel;
-		if (entry->results.count > 0) {
-			entry->first_result += nsel;
-			entry->first_result %= entry->results.count;
+	engine->selection++;
+	if (engine->selection >= nsel) {
+		engine->selection -= nsel;
+		if (engine->results.count > 0) {
+			engine->first_result += nsel;
+			engine->first_result %= engine->results.count;
 		} else {
-			entry->first_result = 0;
+			engine->first_result = 0;
 		}
-		entry->last_num_results_drawn = entry->num_results_drawn;
+		engine->last_num_results_drawn = engine->num_results_drawn;
 	}
 }
 
 void previous_cursor_or_result(struct tofi *tofi)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct engine *engine = &tofi->window.engine;
 
-	if (entry->cursor_theme.show
-			&& entry->selection == 0
-			&& entry->cursor_position > 0) {
-		entry->cursor_position--;
+	if (engine->cursor_theme.show
+			&& engine->selection == 0
+			&& engine->cursor_position > 0) {
+		engine->cursor_position--;
 	} else {
 		select_previous_result(tofi);
 	}
@@ -336,11 +336,11 @@ void previous_cursor_or_result(struct tofi *tofi)
 
 void next_cursor_or_result(struct tofi *tofi)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct engine *engine = &tofi->window.engine;
 
-	if (entry->cursor_theme.show
-			&& entry->cursor_position < entry->input_utf32_length) {
-		entry->cursor_position++;
+	if (engine->cursor_theme.show
+			&& engine->cursor_position < engine->input_utf32_length) {
+		engine->cursor_position++;
 	} else {
 		select_next_result(tofi);
 	}
@@ -348,25 +348,25 @@ void next_cursor_or_result(struct tofi *tofi)
 
 void select_previous_page(struct tofi *tofi)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct engine *engine = &tofi->window.engine;
 
-	if (entry->first_result >= entry->last_num_results_drawn) {
-		entry->first_result -= entry->last_num_results_drawn;
+	if (engine->first_result >= engine->last_num_results_drawn) {
+		engine->first_result -= engine->last_num_results_drawn;
 	} else {
-		entry->first_result = 0;
+		engine->first_result = 0;
 	}
-	entry->selection = 0;
-	entry->last_num_results_drawn = entry->num_results_drawn;
+	engine->selection = 0;
+	engine->last_num_results_drawn = engine->num_results_drawn;
 }
 
 void select_next_page(struct tofi *tofi)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct engine *engine = &tofi->window.engine;
 
-	entry->first_result += entry->num_results_drawn;
-	if (entry->first_result >= entry->results.count) {
-		entry->first_result = 0;
+	engine->first_result += engine->num_results_drawn;
+	if (engine->first_result >= engine->results.count) {
+		engine->first_result = 0;
 	}
-	entry->selection = 0;
-	entry->last_num_results_drawn = entry->num_results_drawn;
+	engine->selection = 0;
+	engine->last_num_results_drawn = engine->num_results_drawn;
 }

@@ -1,8 +1,7 @@
-#ifndef ENTRY_H
-#define ENTRY_H
+#ifndef ENGINE_H
+#define ENGINE_H
 
-#include "entry_backend/pango.h"
-//#include "entry_backend/harfbuzz.h"
+#include "pango.h"
 
 #include <cairo/cairo.h>
 #include <uchar.h>
@@ -21,9 +20,8 @@
 #define MAX_FONT_VARIATIONS_LENGTH 128
 
 
-struct entry {
-	//struct entry_backend_harfbuzz harfbuzz;
-	struct entry_backend_pango pango;
+struct engine {
+	struct pango pango;
 	struct {
 		cairo_surface_t *surface;
 		cairo_t *cr;
@@ -95,8 +93,8 @@ struct entry {
 	struct text_theme selection_theme;
 };
 
-void entry_init(struct entry *entry, uint8_t *restrict buffer, uint32_t width, uint32_t height, uint32_t fractional_scale_numerator);
-void entry_destroy(struct entry *entry);
-void entry_update(struct entry *entry);
+void engine_init(struct engine *engine, uint8_t *restrict buffer, uint32_t width, uint32_t height, uint32_t fractional_scale_numerator);
+void engine_destroy(struct engine *engine);
+void engine_update(struct engine *engine);
 
-#endif /* ENTRY_H */
+#endif /* ENGINE_H */
