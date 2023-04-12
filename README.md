@@ -18,3 +18,7 @@ This readme will focus on this mod. For more information on the original project
 - [x] Change colors config syntax to HEX
 - [x] Add custom color for icons
 - [ ] Add Comment from `.desktop` to line descriptors, right-padded
+
+## State
+
+I placed most of the features that I wanted, but more would need a big rewrite on the code which is not worth it atm.
