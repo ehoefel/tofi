@@ -1827,6 +1827,7 @@ int main(int argc, char *argv[])
 	 * mostly from Pango, and Cairo holds onto quite a bit of cached data
 	 * (without leaking it)
 	 */
+	log_debug("Window closed, performing cleanup.\n");
 	surface_destroy(&tofi.window.surface);
 	entry_destroy(&tofi.window.entry);
 	if (tofi.window.wp_viewport != NULL) {

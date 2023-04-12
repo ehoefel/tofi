@@ -1,5 +1,6 @@
 #include "icon.h"
 #include "color.h"
+#include "log.h"
 #include "unicode.h"
 
 
@@ -64,6 +65,25 @@ void icon_adjust(struct icon *restrict icon)
     icon->adjust_x = -2;
     icon->adjust_y = 5;
     icon_color_set(icon, "#fe1607");
+  } else if (strcmp(icon->text, "󱁊") == 0) {
+    icon->adjust_x = -3;
+    icon->adjust_y = 5;
+    icon_color_set(icon, "#FFFFFF");
+  } else if (strcmp(icon->text, "󱟛") == 0) {
+    icon->adjust_y = 5;
+    icon_color_set(icon, "#FFFFFF");
+  } else if (strcmp(icon->text, "qbittorrent") == 0) {
+    free(icon->text);
+    icon->text = utf8_normalize("󰱦 ");
+    icon->adjust_y = 5;
+    icon_color_set(icon, "#4E8AD5");
+  } else if (strcmp(icon->text, "vlc") == 0) {
+    free(icon->text);
+    icon->text = utf8_normalize("󰕼 ");
+    icon->adjust_y = 5;
+    icon_color_set(icon, "#DF6300");
+  } else {
+    log_debug("Could not find rules for icon %s\n", icon->text);
   }
 
 }
