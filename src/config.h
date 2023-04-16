@@ -23,16 +23,30 @@ static char *css = CSS(
     background-color: #303030;
   }
 
-  prompt {
-    text: "run: ";
+  input::before {
+    content: "run: ";
     color: #FFFFFF;
     font-weight: bold;
   }
 
   input::placeholder {
     color: #767676;
-    text: "";
+    content: "";
     font-style: italic;
+    caret: #FFFFFF block;
+  }
+
+  entry::before {
+    content: "";
+    color: #767676;
+    margin-right: 1em;
+  }
+
+  entry.firefox::before {
+    content: "";
+    color: #E66000;
+    padding-top: 2;
+    padding-right: 3;
   }
 
   entry {

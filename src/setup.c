@@ -24,7 +24,6 @@ void apply_window_css(struct tofi *tofi, struct css_rule *rule) {
   strncpy(tofi->window.engine.font_name, font_family, strlen(font_family));
   tofi->window.engine.font_size = css_get_attr_int(rule, "font-size");
   tofi->window.engine.font_size = css_get_attr_int(rule, "font-size");
-  log_debug("applying anchor\n");
   tofi->anchor = css_get_attr_int(rule, "anchor");
 }
 
@@ -44,7 +43,7 @@ void apply_body_css(struct tofi *tofi, struct css_rule *rule) {
 }
 
 void apply_prompt_css(struct tofi *tofi, struct css_rule *rule) {
-  char *text = css_get_attr_str(rule, "text");
+  char *text = css_get_attr_str(rule, "content");
   strncpy(tofi->window.engine.prompt_text, text, strlen(text));
 
   struct color color = css_get_attr_color(rule, "color");
@@ -53,7 +52,7 @@ void apply_prompt_css(struct tofi *tofi, struct css_rule *rule) {
 }
 
 void apply_placeholder_css(struct tofi *tofi, struct css_rule *rule) {
-  char *text = css_get_attr_str(rule, "text");
+  char *text = css_get_attr_str(rule, "content");
   strncpy(tofi->window.engine.placeholder_text, text, strlen(text));
 
   struct color color = css_get_attr_color(rule, "color");
@@ -70,7 +69,7 @@ void setup_apply_config(struct tofi *tofi)
   struct css_rule body = css_select(parsed_css, "body");
   apply_body_css(tofi, &body);
 
-  struct css_rule prompt = css_select(parsed_css, "prompt");
+  struct css_rule prompt = css_select(parsed_css, "input::before");
   apply_prompt_css(tofi, &prompt);
 
   struct css_rule placeholder = css_select(parsed_css, "input::placeholder");

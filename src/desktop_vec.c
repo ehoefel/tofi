@@ -66,11 +66,14 @@ void desktop_vec_add_file(
     const char *id,
     const char *path)
 {
+  log_debug("parse_desktop_file %s\n", path);
 	GKeyFile *file = g_key_file_new();
+  log_debug("have gkeyfile\n");
 	if (!g_key_file_load_from_file(file, path, G_KEY_FILE_NONE, NULL)) {
 		log_error("Failed to open %s.\n", path);
 		return;
 	}
+  log_debug("loaded file\n");
 
 	const char *group = "Desktop Entry";
 
@@ -79,11 +82,13 @@ void desktop_vec_add_file(
 		goto cleanup_file;
 	}
 
+  log_debug("loading name\n");
 	char *name = g_key_file_get_locale_string(file, group, "Name", NULL, NULL);
 	if (name == NULL) {
 		log_error("%s: No name found.\n", path);
 		goto cleanup_file;
 	}
+  log_debug("parse_desktop_file %s\n", name);
 
 	char *icon = g_key_file_get_locale_string(file, group, "Icon", NULL, NULL);
 

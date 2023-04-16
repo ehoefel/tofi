@@ -1268,7 +1268,6 @@ int main(int argc, char *argv[])
 	log_debug("Generating desktop app list.\n");
 	log_indent();
 	tofi.window.engine.drun = true;
-	//struct desktop_vec apps = drun_generate_cached();
 	struct desktop_vec apps = drun_generate();
 	if (tofi.use_history) {
 		if (tofi.history_file[0] == 0) {
@@ -1280,6 +1279,7 @@ int main(int argc, char *argv[])
 			drun_history_sort(&apps, &tofi.window.engine.history);
 		}
 	}
+	log_debug("Generating commands.\n");
 	struct entry_ref_vec commands = entry_ref_vec_create();
 	for (size_t i = 0; i < apps.count; i++) {
 		entry_ref_vec_add_desktop(&commands, &apps.buf[i]);

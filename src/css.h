@@ -4,7 +4,13 @@
 #include <stdio.h>
 #include "color.h"
 
-enum unit { PX, HEX_COLOR, TEXT, LITERAL, INT, PERCENT };
+enum unit { EM, PX, HEX_COLOR, TEXT, LITERAL, INT, PERCENT, SHAPE };
+
+enum shape {
+  BAR,
+  BLOCK,
+  UNDERSCORE
+};
 
 struct css_classes {
   const char *classes[10];
@@ -34,7 +40,7 @@ struct css {
   struct css_rule *rules;
 };
 
-struct css_line css_get_attr_line(struct css_rule *css_rule, char *attr_name);
+struct directional css_get_attr_dir(struct css_rule *css_rule, char *attr_name);
 struct color css_get_attr_color(struct css_rule *css_rule, char *attr_name);
 char *css_get_attr_str(struct css_rule *css_rule, char *attr_name);
 int css_get_attr_int(struct css_rule *css_rule, char *attr_name);

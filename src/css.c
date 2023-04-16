@@ -4,6 +4,7 @@
 #include "css.h"
 #include "color.h"
 #include "log.h"
+#include "theme.h"
 #include "xmalloc.h"
 #include "wlr-layer-shell-unstable-v1.h"
 
@@ -116,6 +117,36 @@ struct css_attr *find_attr(struct css_rule *rule, char *attr_name)
   return NULL;
 }
 
+enum shape css_get_attr_shape(struct css_rule *rule, char *attr_name)
+{
+  struct css_attr *attr = find_attr(rule, attr_name);
+  if (attr == NULL) {
+    log_debug("rule does not have attr '%s'\n", attr_name);
+    exit(-1);
+  }
+
+  if (attr->unit != SHAPE) {
+    log_debug("cannot convert type '%d' to shape\n", attr->unit);
+    exit(-1);
+  }
+
+  enum shape shape = atoi(attr->value);
+  return shape;
+}
+
+struct directional css_get_attr_dir(struct css_rule *rule, char *attr_name)
+{
+  if (str_equals(attr_name, "padding")) {
+    struct directional dir = {
+      .left = css_get_attr_int(rule, "padding-left"),
+      .bottom = css_get_attr_int(rule, "padding-bottom"),
+      .top = css_get_attr_int(rule, "padding-top"),
+      .right = css_get_attr_int(rule, "padding-right")
+    };
+    return dir;
+  }
+}
+
 struct color css_get_attr_color(struct css_rule *rule, char *attr_name)
 {
   struct css_attr *attr = find_attr(rule, attr_name);
@@ -176,7 +207,13 @@ int css_get_attr_int(struct css_rule *rule, char *attr_name)
       exit(-1);
     }
   }
+
   int value = atoi(attr->value);
+
+  if (attr->unit == EM) {
+    value *= 24;
+  }
+
   return value;
 
 }
@@ -207,8 +244,8 @@ struct css_rule css_select(struct css *css, char *query)
 {
   struct css_rule rule = {
     .count = 0,
-    .size = 20,
-    .attrs = malloc(rule.size * sizeof(struct css_attr*))
+    .size = 128,
+    .attrs = xcalloc(128, sizeof(struct css_attr*))
   };
 
   for (int i = 0; i < css->count; i++) {
@@ -252,7 +289,7 @@ char *css_substring(char *data, int *pos, char delimiter)
 
   *pos += index + 1;
 
-  char *sub = (char *)malloc(sizeof(char) * index);
+  char *sub = (char *)xmalloc(sizeof(char) * index);
   strncpy(sub, str, index);
   sub[index] = '\0';
   trim(sub);
@@ -272,6 +309,13 @@ void rule_add_attr_v(struct css_rule *rule, char *name, char *value)
     int len = strlen(value);
     value[len-1] = '\0';
     value[len-2] = '\0';
+  } else if (str_endswith(value, "em")) {
+    attr->unit = EM;
+    int len = strlen(value);
+    value[len-1] = '\0';
+    value[len-2] = '\0';
+  } else if (str_endswith(name, "-shape")) {
+    attr->unit = SHAPE;
   } else if (str_startswith(value, "#")) {
     attr->unit = HEX_COLOR;
   } else if (str_startswith(value, "\"") && str_endswith(value, "\"")) {
@@ -290,11 +334,11 @@ void rule_add_attr_v(struct css_rule *rule, char *name, char *value)
   }
 
   size_t size_name = strlen(name) + 1;
-  attr->name = malloc(sizeof(char) * size_name);
+  attr->name = xmalloc(sizeof(char) * size_name);
   strncpy(attr->name, name, size_name);
 
   size_t size_value = strlen(value) + 1;
-  attr->value = malloc(sizeof(char) * size_value);
+  attr->value = xmalloc(sizeof(char) * size_value);
   strncpy(attr->value, value, size_value);
 
   rule->count++;
@@ -309,6 +353,22 @@ void rule_add_attr(struct css_rule *rule, struct css_attr *attr)
     rule_add_attr_v(rule, "padding-bottom", value);
     rule_add_attr_v(rule, "padding-top", value);
     rule_add_attr_v(rule, "padding-right", value);
+  } else if (str_equals(name, "caret")) {
+    int index_space = index_of(value, ' ');
+    char *color = value + index_space + 1;
+    value[index_space] = '\0';
+    char *shape = value;
+
+    size_t color_name_size = strlen(name) + strlen("-color") + 1;
+    char color_name [color_name_size];
+    sprintf(color_name, "%s-color", name);
+
+    size_t shape_name_size = strlen(name) + strlen("-shape") + 1;
+    char shape_name [shape_name_size];
+    sprintf(shape_name, "%s-shape", name);
+
+    rule_add_attr_v(rule, color_name, color);
+    rule_add_attr_v(rule, shape_name, shape);
   } else if (str_equals(name, "border") || str_equals(name, "outline")) {
     int index_space = index_of(value, ' ');
     char *color = value + index_space + 1;
@@ -352,7 +412,7 @@ bool parse_rule(char *data, int *pos, struct css_rule *rule)
   parse_selector(selector_str, &rule->selector);
   rule->count = 0;
   rule->size = 128;
-  rule->attrs = malloc(rule->size * sizeof(struct css_rule*));
+  rule->attrs = xmalloc(rule->size * sizeof(struct css_rule*));
 
 
   while (true) {
@@ -367,6 +427,7 @@ bool parse_rule(char *data, int *pos, struct css_rule *rule)
     rule_add_attr(rule, &parsed_attr);
 
     curr_pos = next_pos;
+    free(attr);
   }
 
   *pos += rule_len + 1;
@@ -379,7 +440,7 @@ struct css css_parse(char *data)
   struct css css = {
     .count = 0,
     .size = 128,
-    .rules = malloc(css.size * sizeof(struct css_rule*))
+    .rules = xmalloc(css.size * sizeof(struct css_rule))
   };
 
   int curr_char = 0;
