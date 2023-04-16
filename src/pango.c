@@ -368,9 +368,9 @@ void pango_update(struct engine *engine)
 		const char *name, *comment;
     const struct icon *icon;
 		if (i < engine->results.count) {
-			icon = engine->results.buf[index].result->icon;
-			name = engine->results.buf[index].result->name;
-			comment = engine->results.buf[index].result->comment;
+			icon = engine->results.buf[index].entry->icon;
+			name = engine->results.buf[index].entry->name;
+			comment = engine->results.buf[index].entry->comment;
 		} else {
 			name = "";
 			comment = "";

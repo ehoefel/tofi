@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
-#include "result.h"
+#include "entry.h"
 #include "desktop_vec.h"
 #include "fuzzy_match.h"
 #include "history.h"
@@ -16,25 +16,25 @@
 
 static int cmpresultp(const void *restrict a, const void *restrict b)
 {
-	struct scored_result *restrict res1 = (struct scored_result *)a;
-	struct scored_result *restrict res2 = (struct scored_result *)b;
+	struct scored_entry *restrict res1 = (struct scored_entry *)a;
+	struct scored_entry *restrict res2 = (struct scored_entry *)b;
 
 	/*
 	 * Ensure any NULL strings are shoved to the end.
 	 */
-	if (res1->result->name == NULL) {
+	if (res1->entry->name == NULL) {
 		return 1;
 	}
-	if (res2->result->name == NULL) {
+	if (res2->entry->name == NULL) {
 		return -1;
 	}
-	return strcmp(res1->result->name, res2->result->name);
+	return strcmp(res1->entry->name, res2->entry->name);
 }
 
 static int cmpresultscorep(const void *restrict a, const void *restrict b)
 {
-	struct scored_result *restrict res1 = (struct scored_result *)a;
-	struct scored_result *restrict res2 = (struct scored_result *)b;
+	struct scored_entry *restrict res1 = (struct scored_entry *)a;
+	struct scored_entry *restrict res2 = (struct scored_entry *)b;
 
 	int hist_diff = res2->history_score - res1->history_score;
 	int search_diff = res2->search_score - res1->search_score;
@@ -43,15 +43,15 @@ static int cmpresultscorep(const void *restrict a, const void *restrict b)
 
 static int cmpresulthistoryp(const void *restrict a, const void *restrict b)
 {
-	struct scored_result *restrict res1 = (struct scored_result *)a;
-	struct scored_result *restrict res2 = (struct scored_result *)b;
+	struct scored_entry *restrict res1 = (struct scored_entry *)a;
+	struct scored_entry *restrict res2 = (struct scored_entry *)b;
 
 	return res2->history_score - res1->history_score;
 }
 
-struct result_ref_vec result_ref_vec_create(void)
+struct entry_ref_vec entry_ref_vec_create(void)
 {
-	struct result_ref_vec vec = {
+	struct entry_ref_vec vec = {
 		.count = 0,
 		.size = 128,
 		.buf = xcalloc(128, sizeof(*vec.buf)),
@@ -59,12 +59,12 @@ struct result_ref_vec result_ref_vec_create(void)
 	return vec;
 }
 
-void result_ref_vec_destroy(struct result_ref_vec *restrict vec)
+void entry_ref_vec_destroy(struct entry_ref_vec *restrict vec)
 {
 	free(vec->buf);
 }
 
-void result_ref_vec_add_desktop(struct result_ref_vec *restrict vec,
+void entry_ref_vec_add_desktop(struct entry_ref_vec *restrict vec,
     struct desktop_entry *restrict des)
 {
 	if (vec->count == vec->size) {
@@ -72,12 +72,12 @@ void result_ref_vec_add_desktop(struct result_ref_vec *restrict vec,
 		vec->buf = xrealloc(vec->buf, vec->size * sizeof(vec->buf[0]));
 	}
 
-  struct result *res = (struct result*) malloc(sizeof(struct result));
+  struct entry *res = (struct entry*) malloc(sizeof(struct entry));
 
-	vec->buf[vec->count].result = res;
-	vec->buf[vec->count].result->name = des->name;
-	vec->buf[vec->count].result->icon = &des->icon;
-	vec->buf[vec->count].result->comment = des->comment;
+	vec->buf[vec->count].entry = res;
+	vec->buf[vec->count].entry->name = des->name;
+	vec->buf[vec->count].entry->icon = &des->icon;
+	vec->buf[vec->count].entry->comment = des->comment;
 	vec->buf[vec->count].search_score = 0;
 	vec->buf[vec->count].history_score = 0;
 	vec->count++;
@@ -85,20 +85,20 @@ void result_ref_vec_add_desktop(struct result_ref_vec *restrict vec,
   return res;
 }
 
-void result_ref_vec_add(struct result_ref_vec *restrict vec,
-    struct result *restrict res)
+void entry_ref_vec_add(struct entry_ref_vec *restrict vec,
+    struct entry *restrict res)
 {
 	if (vec->count == vec->size) {
 		vec->size *= 2;
 		vec->buf = xrealloc(vec->buf, vec->size * sizeof(vec->buf[0]));
 	}
-	vec->buf[vec->count].result = res;
+	vec->buf[vec->count].entry = res;
 	vec->buf[vec->count].search_score = 0;
 	vec->buf[vec->count].history_score = 0;
 	vec->count++;
 }
 
-void scored_result_history_sort(struct result_ref_vec *restrict vec,
+void scored_entry_history_sort(struct entry_ref_vec *restrict vec,
     struct history *history)
 {
 	/*
@@ -108,10 +108,10 @@ void scored_result_history_sort(struct result_ref_vec *restrict vec,
 	 */
 	GHashTable *hash = g_hash_table_new(g_str_hash, g_str_equal);
 	for (size_t i = 0; i < vec->count; i++) {
-		g_hash_table_insert(hash, vec->buf[i].result->name, &vec->buf[i]);
+		g_hash_table_insert(hash, vec->buf[i].entry->name, &vec->buf[i]);
 	}
 	for (size_t i = 0; i < history->count; i++) {
-		struct scored_result *res = g_hash_table_lookup(hash, history->buf[i].name);
+		struct scored_entry *res = g_hash_table_lookup(hash, history->buf[i].name);
 		if (res == NULL) {
 			continue;
 		}
@@ -122,24 +122,24 @@ void scored_result_history_sort(struct result_ref_vec *restrict vec,
 	qsort(vec->buf, vec->count, sizeof(vec->buf[0]), cmpresulthistoryp);
 }
 
-struct scored_result *result_vec_find_sorted(
-    struct result_ref_vec *restrict vec, const char * str)
+struct scored_result *entry_vec_find_sorted(
+    struct entry_ref_vec *restrict vec, const char * str)
 {
-  struct result base = { .name = str };
+  struct entry base = { .name = str };
 	return bsearch(&base, vec->buf, vec->count, sizeof(vec->buf[0]), cmpresultp);
 }
 
-struct result_ref_vec result_ref_vec_copy(
-    const struct result_ref_vec *restrict vec)
+struct entry_ref_vec entry_ref_vec_copy(
+    const struct entry_ref_vec *restrict vec)
 {
-	struct result_ref_vec copy = {
+	struct entry_ref_vec copy = {
 		.count = vec->count,
 		.size = vec->size,
 		.buf = xcalloc(vec->size, sizeof(*copy.buf)),
 	};
 
 	for (size_t i = 0; i < vec->count; i++) {
-		copy.buf[i].result = vec->buf[i].result;
+		copy.buf[i].entry = vec->buf[i].entry;
 		copy.buf[i].search_score = vec->buf[i].search_score;
 		copy.buf[i].history_score = vec->buf[i].history_score;
 	}
@@ -147,24 +147,24 @@ struct result_ref_vec result_ref_vec_copy(
 	return copy;
 }
 
-struct result_ref_vec result_ref_vec_filter(
-		const struct result_ref_vec *restrict vec,
+struct entry_ref_vec entry_ref_vec_filter(
+		const struct entry_ref_vec *restrict vec,
 		const char *restrict substr,
 		bool fuzzy)
 {
 	if (substr[0] == '\0') {
-		return result_ref_vec_copy(vec);
+		return entry_ref_vec_copy(vec);
 	}
-	struct result_ref_vec filt = result_ref_vec_create();
+	struct entry_ref_vec filt = entry_ref_vec_create();
 	for (size_t i = 0; i < vec->count; i++) {
 		int32_t search_score;
 		if (fuzzy) {
-			search_score = fuzzy_match_words(substr, vec->buf[i].result->name);
+			search_score = fuzzy_match_words(substr, vec->buf[i].entry->name);
 		} else {
-			search_score = fuzzy_match_simple_words(substr, vec->buf[i].result->name);
+			search_score = fuzzy_match_simple_words(substr, vec->buf[i].entry->name);
 		}
 		if (search_score != INT32_MIN) {
-			result_ref_vec_add(&filt, vec->buf[i].result);
+			entry_ref_vec_add(&filt, vec->buf[i].entry);
 			filt.buf[filt.count - 1].search_score = search_score;
 			filt.buf[filt.count - 1].history_score = vec->buf[i].history_score;
 		}

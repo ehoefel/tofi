@@ -2,8 +2,68 @@
 #include <stdbool.h>
 #include <string.h>
 #include "css.h"
+#include "color.h"
 #include "log.h"
 #include "xmalloc.h"
+#include "wlr-layer-shell-unstable-v1.h"
+
+#define ANCHOR_TOP_LEFT (\
+  ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP \
+  | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT \
+  )
+#define ANCHOR_TOP (\
+  ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP \
+  | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT \
+  | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT \
+  )
+#define ANCHOR_TOP_RIGHT (\
+  ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP \
+  | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT \
+  )
+#define ANCHOR_RIGHT (\
+  ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT \
+  | ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP \
+  | ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM \
+  )
+#define ANCHOR_BOTTOM_RIGHT (\
+  ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM \
+  | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT \
+  )
+#define ANCHOR_BOTTOM (\
+  ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM \
+  | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT \
+  | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT \
+  )
+#define ANCHOR_BOTTOM_LEFT (\
+  ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM \
+  | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT \
+  )
+#define ANCHOR_LEFT (\
+  ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT \
+  | ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP \
+  | ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM \
+  )
+#define ANCHOR_CENTER (\
+  ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP \
+  | ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM \
+  | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT \
+  | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT \
+  )
+
+bool str_endswith(char *str, char *end)
+{
+  return strcmp(str + (strlen(str) - strlen(end)), end) == 0;
+}
+
+bool str_startswith(char *str, char *start)
+{
+  return strncmp(str, start, strlen(start)) == 0;
+}
+
+bool str_equals(char *str, char *str2)
+{
+  return strcmp(str, str2) == 0;
+}
 
 char *trim(char *str)
 {
@@ -56,18 +116,31 @@ struct css_attr *find_attr(struct css_rule *rule, char *attr_name)
   return NULL;
 }
 
-struct css_line css_get_attr_line(struct css_rule *rule, char *attr_name)
-{
-
-}
-
 struct color css_get_attr_color(struct css_rule *rule, char *attr_name)
 {
+  struct css_attr *attr = find_attr(rule, attr_name);
+  if (attr == NULL) {
+    log_debug("rule does not have attr '%s'\n", attr_name);
+    exit(-1);
+  }
 
+  if (attr->unit != HEX_COLOR) {
+    log_debug("cannot convert type '%d' to color\n", attr->unit);
+    exit(-1);
+  }
+  struct color color = hex_to_color(attr->value);
+  return color;
 }
 
 char *css_get_attr_str(struct css_rule *rule, char *attr_name)
 {
+  struct css_attr *attr = find_attr(rule, attr_name);
+  if (attr == NULL) {
+    log_debug("rule does not have attr '%s'\n", attr_name);
+    exit(-1);
+  }
+
+  return attr->value;
 
 }
 
@@ -78,17 +151,32 @@ int css_get_attr_int(struct css_rule *rule, char *attr_name)
     log_debug("rule does not have attr '%s'\n", attr_name);
     exit(-1);
   }
-  char *value_copy = xstrdup(attr->value);
-  int len = strlen(value_copy);
-  if (value_copy[len-1] == 'x') {
-    value_copy[len-1] = '\0';
-    len = strlen(value_copy);
+
+  if (attr->unit == LITERAL && str_equals(attr->name, "anchor")) {
+    if (str_equals(attr->value, "center")) {
+      return ANCHOR_CENTER;
+    } else if (str_equals(attr->value, "top")) {
+      return ANCHOR_TOP;
+    } else if (str_equals(attr->value, "left")) {
+      return ANCHOR_LEFT;
+    } else if (str_equals(attr->value, "top-left")) {
+      return ANCHOR_TOP_LEFT;
+    } else if (str_equals(attr->value, "right")) {
+      return ANCHOR_RIGHT;
+    } else if (str_equals(attr->value, "top-right")) {
+      return ANCHOR_TOP_RIGHT;
+    } else if (str_equals(attr->value, "bottom")) {
+      return ANCHOR_BOTTOM;
+    } else if (str_equals(attr->value, "bottom-left")) {
+      return ANCHOR_BOTTOM_LEFT;
+    } else if (str_equals(attr->value, "bottom-right")) {
+      return ANCHOR_BOTTOM_RIGHT;
+    } else {
+      log_debug("unknown value for anchor '%s'\n", attr->value);
+      exit(-1);
+    }
   }
-  if (value_copy[len-1] == 'p') {
-    value_copy[len-1] = '\0';
-    len = strlen(value_copy);
-  }
-  int value = atoi(value_copy);
+  int value = atoi(attr->value);
   return value;
 
 }
@@ -104,12 +192,14 @@ void css_rule_apply_attr(struct css_rule *rule, struct css_attr *attr)
     struct css_attr *attr_o = &rule->attrs[i];
     if (strcmp(attr_o->name, attr->name) == 0) {
       attr_o->value = attr->value;
+      attr_o->unit = attr->unit;
       return;
     }
   }
   struct css_attr *attr_o = &rule->attrs[rule->count];
   attr_o->name = attr->name;
   attr_o->value = attr->value;
+  attr_o->unit = attr->unit;
   rule->count++;
 }
 
@@ -117,7 +207,7 @@ struct css_rule css_select(struct css *css, char *query)
 {
   struct css_rule rule = {
     .count = 0,
-    .size = 128,
+    .size = 20,
     .attrs = malloc(rule.size * sizeof(struct css_attr*))
   };
 
@@ -146,9 +236,9 @@ int index_of(char *str, char search)
   return ptr - str;
 }
 
-char *css_substring(char *data, uint32_t *pos, char delimiter)
+char *css_substring(char *data, int *pos, char delimiter)
 {
-  uint32_t start = *pos;
+  int start = *pos;
   char *str = data + start;
   int index = index_of(str, delimiter);
   if (index < 0) {
@@ -173,23 +263,91 @@ void parse_selector(char *data, struct css_selector *selector){
   selector->type = data;
 }
 
+void rule_add_attr_v(struct css_rule *rule, char *name, char *value)
+{
+  struct css_attr *attr = &rule->attrs[rule->count];
+
+  if (str_endswith(value, "px")) {
+    attr->unit = PX;
+    int len = strlen(value);
+    value[len-1] = '\0';
+    value[len-2] = '\0';
+  } else if (str_startswith(value, "#")) {
+    attr->unit = HEX_COLOR;
+  } else if (str_startswith(value, "\"") && str_endswith(value, "\"")) {
+    attr->unit = TEXT;
+    value[strlen(value)-1] = '\0';
+    value++;
+  } else if (strspn(value, "-+0123456789")) {
+    attr->unit = INT;
+  } else if (strspn(value, "-+0123456789%")) {
+    attr->unit = PERCENT;
+  } else if (strspn(value, "abcdefghijklmnopqrstuvwxyz")) {
+    attr->unit = LITERAL;
+  } else {
+    log_debug("Could not recognize type of value '%s'\n", value);
+    exit(-1);
+  }
+
+  size_t size_name = strlen(name) + 1;
+  attr->name = malloc(sizeof(char) * size_name);
+  strncpy(attr->name, name, size_name);
+
+  size_t size_value = strlen(value) + 1;
+  attr->value = malloc(sizeof(char) * size_value);
+  strncpy(attr->value, value, size_value);
+
+  rule->count++;
+}
+
+void rule_add_attr(struct css_rule *rule, struct css_attr *attr)
+{
+  char *name = attr->name;
+  char *value = attr->value;
+  if (str_equals(name, "padding")) {
+    rule_add_attr_v(rule, "padding-left", value);
+    rule_add_attr_v(rule, "padding-bottom", value);
+    rule_add_attr_v(rule, "padding-top", value);
+    rule_add_attr_v(rule, "padding-right", value);
+  } else if (str_equals(name, "border") || str_equals(name, "outline")) {
+    int index_space = index_of(value, ' ');
+    char *color = value + index_space + 1;
+    value[index_space] = '\0';
+    char *width = value;
+
+    size_t color_name_size = strlen(name) + strlen("-color") + 1;
+    char color_name [color_name_size];
+    sprintf(color_name, "%s-color", name);
+
+    size_t width_name_size = strlen(name) + strlen("-width") + 1;
+    char width_name [width_name_size];
+    sprintf(width_name, "%s-width", name);
+
+    rule_add_attr_v(rule, color_name, color);
+    rule_add_attr_v(rule, width_name, width);
+  } else {
+    rule_add_attr_v(rule, name, value);
+  }
+
+}
+
 void parse_attr(char *data, struct css_attr *attr)
 {
-  uint32_t pos = 0;
+  int pos = 0;
   attr->name = css_substring(data, &pos, ':');
   attr->value = css_substring(data, &pos, '\0');
 }
 
-bool parse_rule(char *data, uint32_t *pos, struct css_rule *rule)
+bool parse_rule(char *data, int *pos, struct css_rule *rule)
 {
-  uint32_t start = *pos;
+  int start = *pos;
   char *str = data + start;
   int rule_len = index_of(str, '}');
   if (rule_len <= 0) {
     return false;
   }
 
-  uint32_t curr_pos = 0;
+  int curr_pos = 0;
   char *selector_str = css_substring(str, &curr_pos, '{');
   parse_selector(selector_str, &rule->selector);
   rule->count = 0;
@@ -198,14 +356,15 @@ bool parse_rule(char *data, uint32_t *pos, struct css_rule *rule)
 
 
   while (true) {
-    uint32_t next_pos = curr_pos;
+    int next_pos = curr_pos;
     char *attr = css_substring(str, &next_pos, ';');
     if (attr == NULL || next_pos >= rule_len) {
       break;
     }
 
-    parse_attr(attr, &rule->attrs[rule->count]);
-    rule->count++;
+    struct css_attr parsed_attr;
+    parse_attr(attr, &parsed_attr);
+    rule_add_attr(rule, &parsed_attr);
 
     curr_pos = next_pos;
   }
@@ -223,8 +382,7 @@ struct css css_parse(char *data)
     .rules = malloc(css.size * sizeof(struct css_rule*))
   };
 
-  struct css_rule *rule;
-  uint32_t curr_char = 0;
+  int curr_char = 0;
   while (true) {
     bool res = parse_rule(data, &curr_char, &css.rules[css.count]);
     if (!res) {

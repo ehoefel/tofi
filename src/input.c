@@ -6,7 +6,7 @@
 #include "input.h"
 #include "log.h"
 #include "nelem.h"
-#include "result.h"
+#include "entry.h"
 #include "tofi.h"
 #include "unicode.h"
 
@@ -146,8 +146,8 @@ void add_character(struct tofi *tofi, xkb_keycode_t keycode)
 		engine->input_utf8_length += len;
 
 		if (engine->drun) {
-			struct result_ref_vec results = desktop_vec_filter(&engine->apps, engine->input_utf8, tofi->fuzzy_match);
-			result_ref_vec_destroy(&engine->results);
+			struct entry_ref_vec results = desktop_vec_filter(&engine->apps, engine->input_utf8, tofi->fuzzy_match);
+			entry_ref_vec_destroy(&engine->results);
 			engine->results = results;
 		} else {
 //			struct string_ref_vec tmp = engine->results;
@@ -182,7 +182,7 @@ void input_refresh_results(struct tofi *tofi)
 	}
 	engine->input_utf8[bytes_written] = '\0';
 	engine->input_utf8_length = bytes_written;
-	result_ref_vec_destroy(&engine->results);
+	entry_ref_vec_destroy(&engine->results);
 	if (engine->drun) {
 		engine->results = desktop_vec_filter(&engine->apps, engine->input_utf8, tofi->fuzzy_match);
 	} else {

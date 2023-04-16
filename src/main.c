@@ -14,14 +14,15 @@
 #include <wayland-util.h>
 #include <xkbcommon/xkbcommon.h>
 #include "tofi.h"
-#include "drun.h"
 #include "config.h"
+#include "drun.h"
+#include "setup.h"
 #include "engine.h"
 #include "input.h"
 #include "log.h"
 #include "nelem.h"
 #include "lock.h"
-#include "result.h"
+#include "entry.h"
 #include "scale.h"
 #include "shm.h"
 #include "string_vec.h"
@@ -862,11 +863,11 @@ static bool do_submit(struct tofi *tofi)
 {
 	struct engine *engine = &tofi->window.engine;
 	uint32_t selection = engine->selection + engine->first_result;
-	char *res = engine->results.buf[selection].result->name;
+	char *res = engine->results.buf[selection].entry->name;
 
 	if (tofi->window.engine.results.count == 0) {
 		/* Always require a match in drun mode. */
-		if (tofi->require_match || engine->drun) {
+		if (tofi->require_match) {
 			return false;
 		} else {
 			printf("%s\n", engine->input_utf8);
@@ -874,36 +875,28 @@ static bool do_submit(struct tofi *tofi)
 		}
 	}
 
-	if (engine->drun) {
-		/*
-		 * At this point, the list of apps is history sorted rather
-		 * than alphabetically sorted, so we can't use
-		 * desktop_vec_find_sorted().
-		 */
-		struct desktop_entry *app = NULL;
-		for (size_t i = 0; i < engine->apps.count; i++) {
-			if (!strcmp(res, engine->apps.buf[i].name)) {
-				app = &engine->apps.buf[i];
-				break;
-			}
+	/*
+	 * At this point, the list of apps is history sorted rather
+	 * than alphabetically sorted, so we can't use
+	 * desktop_vec_find_sorted().
+	 */
+	struct desktop_entry *app = NULL;
+	for (size_t i = 0; i < engine->apps.count; i++) {
+		if (!strcmp(res, engine->apps.buf[i].name)) {
+			app = &engine->apps.buf[i];
+			break;
 		}
-		if (app == NULL) {
-			log_error("Couldn't find application file! This shouldn't happen.\n");
-			return false;
-		}
-		char *path = app->path;
-		if (tofi->drun_launch) {
-			drun_launch(path);
-		} else {
-			drun_print(path, tofi->default_terminal);
-		}
-	} else {
-		printf("%s\n", res);
 	}
+	if (app == NULL) {
+		log_error("Couldn't find application file! This shouldn't happen.\n");
+		return false;
+	}
+	char *path = app->path;
+	drun_print(path, tofi->default_terminal);
 	if (tofi->use_history) {
 		history_add(
 				&engine->history,
-				engine->results.buf[selection].result->name);
+				engine->results.buf[selection].entry->name);
 		if (tofi->history_file[0] == 0) {
 			history_save_default_file(&engine->history, engine->drun);
 		} else {
@@ -1014,38 +1007,15 @@ int main(int argc, char *argv[])
 	/* Default options. */
 	struct tofi tofi = {
 		.window = {
-			.scale = 1,
-			.width = 1280,
-			.height = 720,
-			.exclusive_zone = -1,
 			.engine = {
-				.font_name = "jetbrains mono",
-				.font_size = 24,
-				.prompt_text = "run: ",
-				.prompt_theme.foreground_color = hex_to_color("#ffffff"),
-				.prompt_theme.foreground_specified = true,
 				.hidden_character_utf8 = u8"*",
-				.padding_top = 8,
-				.padding_bottom = 8,
-				.padding_left = 8,
-				.padding_right = 8,
 				.clip_to_padding = true,
-				.border_width = 12,
-				.outline_width = 4,
-				.background_color = hex_to_color("#303030"),
 				.foreground_color = hex_to_color("#767676"),
-				.border_color = hex_to_color("#767676"),
-				.outline_color = hex_to_color("#262626"),
-				.placeholder_theme.foreground_color = hex_to_color("#ffffff"),
-				.placeholder_theme.foreground_specified = true,
 				.selection_theme.foreground_color = hex_to_color("#ffffff"),
 				.selection_theme.foreground_specified = true,
 				.cursor_theme.thickness = 2
 			}
 		},
-		.anchor =  ANCHOR_CENTER,
-		.use_history = true,
-		.require_match = true,
 		.use_scale = true,
 	};
 	wl_list_init(&tofi.output_list);
@@ -1286,43 +1256,39 @@ int main(int argc, char *argv[])
 		log_debug("Selected output %s.\n", el->name);
 	}
 
-	/*
-	 * We can now scale values and calculate any percentages, as we know
-	 * the output size and scale.
-	 */
-  config_apply(&tofi);
+  struct css parsed_css = css_parse(css);
+  tofi.window.engine.css = &parsed_css;
+  setup_apply_config(&tofi);
 
 	/*
 	 * If we were invoked as tofi-run, generate the command list.
 	 * If we were invoked as tofi-drun, generate the desktop app list.
 	 * Otherwise, just read standard input.
 	 */
-	if (strstr(argv[0], "-drun")) {
-		log_debug("Generating desktop app list.\n");
-		log_indent();
-		tofi.window.engine.drun = true;
-		//struct desktop_vec apps = drun_generate_cached();
-		struct desktop_vec apps = drun_generate();
+	log_debug("Generating desktop app list.\n");
+	log_indent();
+	tofi.window.engine.drun = true;
+	//struct desktop_vec apps = drun_generate_cached();
+	struct desktop_vec apps = drun_generate();
+	if (tofi.use_history) {
+		if (tofi.history_file[0] == 0) {
+			tofi.window.engine.history = history_load_default_file(tofi.window.engine.drun);
+		} else {
+			tofi.window.engine.history = history_load(tofi.history_file);
+		}
 		if (tofi.use_history) {
-			if (tofi.history_file[0] == 0) {
-				tofi.window.engine.history = history_load_default_file(tofi.window.engine.drun);
-			} else {
-				tofi.window.engine.history = history_load(tofi.history_file);
-			}
-			if (tofi.window.engine.drun) {
-				drun_history_sort(&apps, &tofi.window.engine.history);
-			}
+			drun_history_sort(&apps, &tofi.window.engine.history);
 		}
-		struct result_ref_vec commands = result_ref_vec_create();
-		for (size_t i = 0; i < apps.count; i++) {
-			result_ref_vec_add_desktop(&commands, &apps.buf[i]);
-		}
-		tofi.window.engine.commands = commands;
-		tofi.window.engine.apps = apps;
-		log_unindent();
-		log_debug("App list generated.\n");
 	}
-	tofi.window.engine.results = result_ref_vec_copy(&tofi.window.engine.commands);
+	struct entry_ref_vec commands = entry_ref_vec_create();
+	for (size_t i = 0; i < apps.count; i++) {
+		entry_ref_vec_add_desktop(&commands, &apps.buf[i]);
+	}
+	tofi.window.engine.commands = commands;
+	tofi.window.engine.apps = apps;
+	log_unindent();
+	log_debug("App list generated.\n");
+	tofi.window.engine.results = entry_ref_vec_copy(&tofi.window.engine.commands);
 
 	/*
 	 * Next, we create the Wayland surface, which takes on the
@@ -1644,14 +1610,12 @@ int main(int argc, char *argv[])
 	xkb_keymap_unref(tofi.xkb_keymap);
 	xkb_context_unref(tofi.xkb_context);
 	wl_registry_destroy(tofi.wl_registry);
-	if (tofi.window.engine.drun) {
-		desktop_vec_destroy(&tofi.window.engine.apps);
-	}
+	desktop_vec_destroy(&tofi.window.engine.apps);
 	if (tofi.window.engine.command_buffer != NULL) {
 		free(tofi.window.engine.command_buffer);
 	}
-	result_ref_vec_destroy(&tofi.window.engine.commands);
-	result_ref_vec_destroy(&tofi.window.engine.results);
+	entry_ref_vec_destroy(&tofi.window.engine.commands);
+	entry_ref_vec_destroy(&tofi.window.engine.results);
 	if (tofi.use_history) {
 		history_destroy(&tofi.window.engine.history);
 	}

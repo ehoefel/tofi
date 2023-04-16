@@ -2,6 +2,7 @@
 #include <math.h>
 #include <unistd.h>
 #include "engine.h"
+#include "css.h"
 #include "log.h"
 #include "nelem.h"
 #include "scale.h"
@@ -89,7 +90,8 @@ void engine_init(struct engine *engine, uint8_t *restrict buffer, uint32_t width
 
 	log_debug("Drawing window.\n");
 	/* Draw the background */
-	struct color color = engine->background_color;
+  struct css_rule css_window = css_select(engine->css, "window");
+  struct color color = css_get_attr_color(&css_window, "background-color");
 	cairo_set_source_rgba(cr, color.r, color.g, color.b, color.a);
 	cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
 	cairo_paint(cr);
@@ -195,9 +197,6 @@ void engine_init(struct engine *engine, uint8_t *restrict buffer, uint32_t width
 	if (!engine->cursor_theme.color_specified) {
 		engine->cursor_theme.color = engine->input_theme.foreground_color;
 	}
-	if (!engine->cursor_theme.text_color_specified) {
-		engine->cursor_theme.text_color = engine->background_color;
-	}
 
 	/*
 	 * Perform an initial render of the text.
@@ -251,7 +250,8 @@ void engine_update(struct engine *engine)
 	cairo_t *cr = engine->cairo[engine->index].cr;
 
 	/* Clear the image. */
-	struct color color = engine->background_color;
+  struct css_rule css_window = css_select(engine->css, "window");
+  struct color color = css_get_attr_color(&css_window, "background-color");
 	cairo_set_source_rgba(cr, color.r, color.g, color.b, color.a);
 	cairo_save(cr);
 	cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);

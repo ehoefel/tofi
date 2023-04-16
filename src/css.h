@@ -4,19 +4,21 @@
 #include <stdio.h>
 #include "color.h"
 
-struct css_line {
-  uint32_t width;
-  struct color color;
+enum unit { PX, HEX_COLOR, TEXT, LITERAL, INT, PERCENT };
+
+struct css_classes {
+  const char *classes[10];
 };
 
 struct css_selector {
   char *type;
-  char **classes;
+  struct css_classes classes;
 };
 
 struct css_attr {
   char *name;
   char *value;
+  enum unit unit;
 };
 
 struct css_rule {

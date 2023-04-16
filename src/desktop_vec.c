@@ -4,7 +4,7 @@
 #include "fuzzy_match.h"
 #include "icon.h"
 #include "log.h"
-#include "result.h"
+#include "entry.h"
 #include "string_vec.h"
 #include "unicode.h"
 #include "xmalloc.h"
@@ -138,8 +138,8 @@ static int cmpdesktopp(const void *restrict a, const void *restrict b)
 
 static int cmpresultscorep(const void *restrict a, const void *restrict b)
 {
-	struct scored_result *restrict res1 = (struct scored_result *)a;
-	struct scored_result *restrict res2 = (struct scored_result *)b;
+	struct scored_entry *restrict res1 = (struct scored_entry *)a;
+	struct scored_entry *restrict res2 = (struct scored_entry *)b;
 
 	int hist_diff = res2->history_score - res1->history_score;
 	int search_diff = res2->search_score - res1->search_score;
@@ -161,12 +161,12 @@ struct desktop_entry *desktop_vec_find_sorted(struct desktop_vec *restrict vec, 
 	return bsearch(&tmp, vec->buf, vec->count, sizeof(vec->buf[0]), cmpdesktopp);
 }
 
-struct result_ref_vec desktop_vec_filter(
+struct entry_ref_vec desktop_vec_filter(
 		const struct desktop_vec *restrict vec,
 		const char *restrict substr,
 		bool fuzzy)
 {
-	struct result_ref_vec filt = result_ref_vec_create();
+	struct entry_ref_vec filt = entry_ref_vec_create();
 	for (size_t i = 0; i < vec->count; i++) {
 		int32_t search_score;
 		if (fuzzy) {
@@ -175,7 +175,7 @@ struct result_ref_vec desktop_vec_filter(
 			search_score = fuzzy_match_simple_words(substr, vec->buf[i].name);
 		}
 		if (search_score != INT32_MIN) {
-			result_ref_vec_add_desktop(&filt, &vec->buf[i]);
+			entry_ref_vec_add_desktop(&filt, &vec->buf[i]);
 			/*
 			 * Store the position of the match in the string as
 			 * its search_score, for later sorting.
@@ -190,7 +190,7 @@ struct result_ref_vec desktop_vec_filter(
 				search_score = fuzzy_match_simple_words(substr, vec->buf[i].keywords);
 			}
 			if (search_score != INT32_MIN) {
-				result_ref_vec_add_desktop(&filt, &vec->buf[i]);
+				entry_ref_vec_add_desktop(&filt, &vec->buf[i]);
 				/*
 				 * Arbitrary score addition to make name
 				 * matches preferred over keyword matches.
@@ -201,8 +201,8 @@ struct result_ref_vec desktop_vec_filter(
 		}
 	}
 	/*
-	 * Sort the results by this search_score. This moves matches at the beginnings
-	 * of words to the front of the result list.
+	 * Sort the entrys by this search_score. This moves matches at the beginnings
+	 * of words to the front of the entry list.
 	 */
 	qsort(filt.buf, filt.count, sizeof(filt.buf[0]), cmpresultscorep);
 	return filt;

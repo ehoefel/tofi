@@ -6,9 +6,10 @@
 #include <cairo/cairo.h>
 #include <uchar.h>
 #include "color.h"
+#include "css.h"
 #include "desktop_vec.h"
 #include "history.h"
-#include "result.h"
+#include "entry.h"
 #include "surface.h"
 #include "string_vec.h"
 #include "theme.h"
@@ -22,6 +23,7 @@
 
 struct engine {
 	struct pango pango;
+	struct css *css;
 	struct {
 		cairo_surface_t *surface;
 		cairo_t *cr;
@@ -37,8 +39,8 @@ struct engine {
 	uint32_t selection;
 	uint32_t first_result;
 	char *command_buffer;
-	struct result_ref_vec results;
-	struct result_ref_vec commands;
+	struct entry_ref_vec results;
+	struct entry_ref_vec commands;
 	struct desktop_vec apps;
 	struct history history;
 	bool use_pango;
@@ -79,7 +81,6 @@ struct engine {
 	uint32_t border_width;
 	uint32_t outline_width;
 	struct color foreground_color;
-	struct color background_color;
 	struct color selection_highlight_color;
 	struct color border_color;
 	struct color outline_color;

@@ -50,7 +50,6 @@ add_project_arguments(
 common_sources = files(
   'src/clipboard.c',
   'src/color.c',
-  'src/config.c',
   'src/css.c',
   'src/desktop_vec.c',
   'src/drun.c',
@@ -63,8 +62,9 @@ common_sources = files(
   'src/lock.c',
   'src/log.c',
   'src/mkdirp.c',
-  'src/result.c',
+  'src/entry.c',
   'src/scale.c',
+  'src/setup.c',
   'src/shm.c',
   'src/string_vec.c',
   'src/surface.c',
