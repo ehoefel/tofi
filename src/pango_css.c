@@ -4,6 +4,7 @@
 #include "pango_css.h"
 #include "css.h"
 #include "engine.h"
+#include "entry.h"
 #include "icon.h"
 #include "log.h"
 #include "nelem.h"
@@ -49,6 +50,7 @@ static void render_text(
     PangoRectangle *ink_rect,
     PangoRectangle *logical_rect)
 {
+  log_debug("rendering text %s.\n", text);
   PangoLayout *layout = engine->pango.layout;
   struct color color = css_get_attr_color(css, "color");
   cairo_set_source_rgba(cr, color.r, color.g, color.b, color.a);
@@ -58,6 +60,7 @@ static void render_text(
   pango_cairo_show_layout(cr, layout);
 
   pango_layout_get_pixel_extents(layout, ink_rect, logical_rect);
+  log_debug("text rendered.\n", text);
 }
 
 static void render_input(
@@ -100,27 +103,31 @@ static void render_input(
       - ink_rect->width;
   }
 
+  /*
+  {
   struct color bg_color = css_get_attr_color(css, "background-color");
-  if (bg_color.a != 0) {
-    cairo_save(cr);
-    cairo_set_source_rgba(cr, bg_color.r, bg_color.g, bg_color.b, bg_color.a);
-    cairo_translate(
-        cr,
-        floor(-padding.left + ink_rect->x),
-        -padding.top);
-    rounded_rectangle(
-        cr,
-        ceil(ink_rect->width + extra_cursor_advance + padding.left + padding.right),
-        ceil(logical_rect->height + padding.top + padding.bottom),
-        0
-        );
-    cairo_fill(cr);
-    cairo_restore(cr);
+    if (bg_color.a != 0) {
+      cairo_save(cr);
+      cairo_set_source_rgba(cr, bg_color.r, bg_color.g, bg_color.b, bg_color.a);
+      cairo_translate(
+          cr,
+          floor(-padding.left + ink_rect->x),
+          -padding.top);
+      rounded_rectangle(
+          cr,
+          ceil(ink_rect->width + extra_cursor_advance + padding.left + padding.right),
+          ceil(logical_rect->height + padding.top + padding.bottom),
+          0
+          );
+      cairo_fill(cr);
+      cairo_restore(cr);
 
-    cairo_set_source_rgba(cr, color.r, color.g, color.b, color.a);
+      cairo_set_source_rgba(cr, color.r, color.g, color.b, color.a);
 
-    pango_cairo_show_layout(cr, layout);
+      pango_cairo_show_layout(cr, layout);
+    }
   }
+  */
 
   double cursor_x;
   double cursor_width;
@@ -148,10 +155,10 @@ static void render_input(
   }
 
   cairo_save(cr);
-  struct color cursor = css_get_attr_color(css, "cursor-color");
+  struct color cursor = css_get_attr_color(css, "caret-color");
   cairo_set_source_rgba(cr, cursor.r, cursor.g, cursor.b, cursor.a);
   cairo_translate(cr, cursor_x, 0);
-  switch (css_get_attr_shape(css, "curshor-shape")) {
+  switch (css_get_attr_shape(css, "caret-shape")) {
     case BAR:
       rounded_rectangle(cr, 2, logical_rect->height, 0);
       cairo_fill(cr);
@@ -268,6 +275,7 @@ static bool size_overflows(struct engine *engine, uint32_t width, uint32_t heigh
  */
 void pango_update(struct engine *engine)
 {
+  log_debug("Doing pango update\n");
   cairo_t *cr = engine->cairo[engine->index].cr;
   PangoLayout *layout = engine->pango.layout;
 
@@ -276,15 +284,15 @@ void pango_update(struct engine *engine)
   /* Render the prompt */
   PangoRectangle ink_rect;
   PangoRectangle logical_rect;
-  struct css_rule prompt_css = css_select(engine->css, "input::before")
+  struct css_rule prompt_css = css_select(engine->css, "input::before");
   render_text(cr, engine, engine->prompt_text, &prompt_css, &ink_rect, &logical_rect);
 
   cairo_translate(cr, logical_rect.width + logical_rect.x, 0);
   int prompt_padding_right = css_get_attr_int(&prompt_css, "padding-right");
 
   /* Render the engine text */
-  struct css_rule input_css = css_select(engine->css, "input")
-  struct css_rule input_placeholder_css = css_select(engine->css, "input::placeholder")
+  struct css_rule input_css = css_select(engine->css, "input");
+  struct css_rule input_placeholder_css = css_select(engine->css, "input::placeholder");
   if (engine->input_utf8_length == 0) {
     render_input(
         cr,
@@ -338,7 +346,7 @@ void pango_update(struct engine *engine)
     const char *name, *comment;
     const struct icon *icon;
     if (i < engine->results.count) {
-      struct entry_ref *result = engine->results.buf[index].entry;
+      struct entry *result = engine->results.buf[index].entry;
       icon = result->icon;
       name = result->name;
       comment = result->comment;
@@ -353,28 +361,9 @@ void pango_update(struct engine *engine)
     struct color color = css_get_attr_color(&result_css, "color");
     cairo_set_source_rgba(cr, color.r, color.g, color.b, color.a);
 
-    if (engine->num_results > 0) {
-      render_text(cr, engine, name, &result_css, &ink_rect, &logical_rect);
-    } else {
-
-      if (size_overflows(engine, 0, logical_rect.height)) {
-        engine->num_results_drawn = i;
-        break;
-      }
-
-      //int32_t padding = css_get_attr_int(icon_css, "padding-right")
-
-      /*
-      if (icon) {
-        cairo_translate(cr, icon->adjust_x, icon->adjust_y);
-        render_text_themed(cr, engine, icon->text, &theme_icon, &ink_rect, &logical_rect);
-        cairo_translate(cr, -icon->adjust_x, -icon->adjust_y);
-      }
-      */
-
-      render_text_themed(cr, engine, name, theme, &ink_rect, &logical_rect);
-    }
+    render_text(cr, engine, name, &result_css, &ink_rect, &logical_rect);
   }
+
   engine->num_results_drawn = i;
 
   cairo_restore(cr);

@@ -17,8 +17,11 @@ struct css_classes {
 };
 
 struct css_selector {
-  char *type;
+  char *str_repr;
+  char *element;
+  char *pseudo_element;
   struct css_classes classes;
+  struct css_classes pseudo_classes;
 };
 
 struct css_attr {

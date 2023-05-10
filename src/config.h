@@ -23,6 +23,11 @@ static char *css = CSS(
     background-color: #303030;
   }
 
+  input {
+    color: #FFFFFF;
+    caret: #FFFFFF block;
+  }
+
   input::before {
     content: "run: ";
     color: #FFFFFF;
@@ -33,7 +38,6 @@ static char *css = CSS(
     color: #767676;
     content: "";
     font-style: italic;
-    caret: #FFFFFF block;
   }
 
   entry::before {

@@ -54,7 +54,7 @@ common_sources = files(
   'src/desktop_vec.c',
   'src/drun.c',
   'src/engine.c',
-  'src/pango.c',
+  'src/pango_css.c',
   'src/fuzzy_match.c',
   'src/history.c',
   'src/icon.c',

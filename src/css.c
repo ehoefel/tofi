@@ -51,6 +51,18 @@
   | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT \
   )
 
+int index_of(char *str, char search)
+{
+  char *ptr;
+  ptr = strchr(str, search);
+  if (ptr == NULL) {
+    return -1;
+  }
+
+  return ptr - str;
+}
+
+
 bool str_endswith(char *str, char *end)
 {
   return strcmp(str + (strlen(str) - strlen(end)), end) == 0;
@@ -63,7 +75,10 @@ bool str_startswith(char *str, char *start)
 
 bool str_equals(char *str, char *str2)
 {
-  return strcmp(str, str2) == 0;
+  return (str == NULL && str2 == NULL) ||
+    (str == NULL && strlen(str2) == 0) ||
+    (str2 == NULL && strlen(str) == 0) ||
+    (str != NULL && str2 != NULL && strcmp(str, str2) == 0);
 }
 
 char *trim(char *str)
@@ -110,7 +125,7 @@ struct css_attr *find_attr(struct css_rule *rule, char *attr_name)
 {
   for (int i = 0; i < rule->count; i++) {
     struct css_attr *attr = &rule->attrs[i];
-    if (strcmp(attr->name, attr_name) == 0) {
+    if (str_equals(attr->name, attr_name)) {
       return attr;
     }
   }
@@ -122,11 +137,15 @@ enum shape css_get_attr_shape(struct css_rule *rule, char *attr_name)
   struct css_attr *attr = find_attr(rule, attr_name);
   if (attr == NULL) {
     log_debug("rule does not have attr '%s'\n", attr_name);
+    log_debug("attrs available: %d\n", rule->count);
+    for (int i = 0; i < rule->count; i++) {
+      log_debug("%d: %s\n", i, rule->attrs[i].name);
+    }
     exit(-1);
   }
 
   if (attr->unit != SHAPE) {
-    log_debug("cannot convert type '%d' to shape\n", attr->unit);
+    log_debug("cannot convert type '%d' to shape (%s: %s)\n", attr->unit, attr->name, attr->value);
     exit(-1);
   }
 
@@ -151,12 +170,13 @@ struct color css_get_attr_color(struct css_rule *rule, char *attr_name)
 {
   struct css_attr *attr = find_attr(rule, attr_name);
   if (attr == NULL) {
-    log_debug("rule does not have attr '%s'\n", attr_name);
+    log_debug("rule '%s' does not have attr '%s'\n", rule->selector.str_repr, attr_name);
+    log_debug("available attrs: %d\n", rule->count);
     exit(-1);
   }
 
   if (attr->unit != HEX_COLOR) {
-    log_debug("cannot convert type '%d' to color\n", attr->unit);
+    log_debug("cannot convert type '%d' to color (%s: %s)\n", attr->unit, attr->name, attr->value);
     exit(-1);
   }
   struct color color = hex_to_color(attr->value);
@@ -179,8 +199,7 @@ int css_get_attr_int(struct css_rule *rule, char *attr_name)
 {
   struct css_attr *attr = find_attr(rule, attr_name);
   if (attr == NULL) {
-    log_debug("rule does not have attr '%s'\n", attr_name);
-    exit(-1);
+    return 0;
   }
 
   if (attr->unit == LITERAL && str_equals(attr->name, "anchor")) {
@@ -218,9 +237,22 @@ int css_get_attr_int(struct css_rule *rule, char *attr_name)
 
 }
 
-bool selector_match(struct css_selector *selector, char *query)
+
+bool selector_match(struct css_selector *rule_selector,
+    struct css_selector *query_selector)
 {
-  return strcmp(selector->type, query) == 0;
+
+  if (!str_equals(rule_selector->element, query_selector->element)) {
+    return false;
+  }
+
+  if (rule_selector->pseudo_element != NULL && strlen(rule_selector->pseudo_element) > 0) {
+    if (!str_equals(rule_selector->pseudo_element, query_selector->pseudo_element)) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 void css_rule_apply_attr(struct css_rule *rule, struct css_attr *attr)
@@ -240,9 +272,167 @@ void css_rule_apply_attr(struct css_rule *rule, struct css_attr *attr)
   rule->count++;
 }
 
+char *css_extract_element(char *query) {
+  int end;
+  int len = strlen(query);
+
+  for (end = 1; end < len; end++) {
+    if (query[end] == '.' || query[end] == ':')
+      break;
+  }
+
+  char *element = (char *)xmalloc(sizeof(char) * (end+ 1));
+  strncpy(element, query, end);
+  element[end] = '\0';
+
+  log_debug("css_extract_element(\"%s\") -> %s\n", query, element);
+  return element;
+}
+
+char *css_extract_pseudo_element(char *query) {
+  int start = index_of(query, ':');
+
+  if (start < 0) {
+    return NULL;
+  }
+
+  start++;
+  char *str = query + start;
+
+  if (str[0] != ':') {
+    return NULL;
+  }
+
+  start++;
+  str = query + start;
+  int len = strlen(str);
+  int end;
+
+  for (end = 1; end < len; end++) {
+    if (str[end] == '.' || str[end] == ':')
+      break;
+  }
+
+  char *element = (char *)xmalloc(sizeof(char) * (end + 1));
+  strncpy(element, str, end);
+  element[end] = '\0';
+  log_debug("css_extract_pseudo_element(\"%s\") -> %s\n", query, element);
+  return element;
+}
+
+char *css_extract_class(char *query, int *pos) {
+  int start = *pos;
+  char *str = query + start;
+  start = index_of(str, '.');
+
+  if (start < 0) {
+    return NULL;
+  }
+
+  start += *pos;
+  start++;
+  str = str + start;
+
+  if (str[0] == ':') {
+    return NULL;
+  }
+
+  int end;
+
+  for (end = 1; end < strlen(str); end++) {
+    if (str[end] == '.' || str[end] == ':')
+      break;
+  }
+
+  char *element = (char *)xmalloc(sizeof(char) * (end + 1));
+  strncpy(element, str, end);
+  element[end] = '\0';
+  *pos = start + end;
+  return element;
+}
+
+struct css_classes css_extract_classes(char *query) {
+  struct css_classes classes;
+
+  for (int i = 0; i < 10; i++) {
+    classes.classes[i] = NULL;
+  }
+
+  int count = 0;
+  int pos = 0;
+  while (true) {
+    classes.classes[count] = css_extract_class(query, &pos);
+    if (classes.classes[count] == NULL) {
+      break;
+    }
+    count++;
+    if (count >= 9)
+      exit(0);
+  }
+
+  return classes;
+}
+
+char *css_extract_pseudo_class(char *query, int *pos) {
+  int start = *pos;
+  char *str = query + start;
+  start = index_of(str, ':');
+
+  if (start < 0) {
+    return NULL;
+  }
+
+  start++;
+  str = str + start;
+
+  if (str[0] == ':') {
+    return NULL;
+  }
+
+  int end;
+
+  for (end = 1; end < strlen(str); end++) {
+    if (str[end] == '.' || str[end] == ':')
+      break;
+  }
+
+  char *element = (char *)xmalloc(sizeof(char) * (end + 1));
+  strncpy(element, str, end);
+  element[end] = '\0';
+  *pos = start + end;
+  return element;
+}
+
+struct css_classes css_extract_pseudo_classes(char *query) {
+  struct css_classes classes;
+
+  for (int i = 0; i < 10; i++) {
+    classes.classes[i] = NULL;
+  }
+
+  int count = 0;
+  int pos = 0;
+  while (true) {
+    classes.classes[count] = css_extract_pseudo_class(query, &pos);
+    if (classes.classes[count] == NULL) {
+      break;
+    }
+    count++;
+  }
+
+  return classes;
+}
+
 struct css_rule css_select(struct css *css, char *query)
 {
   struct css_rule rule = {
+    .selector = {
+      .element = css_extract_element(query),
+      .pseudo_element = css_extract_pseudo_element(query),
+      .classes = css_extract_classes(query),
+      .pseudo_classes = css_extract_pseudo_classes(query),
+      .str_repr = query
+    },
     .count = 0,
     .size = 128,
     .attrs = xcalloc(128, sizeof(struct css_attr*))
@@ -250,7 +440,7 @@ struct css_rule css_select(struct css *css, char *query)
 
   for (int i = 0; i < css->count; i++) {
     struct css_rule *rule_o = &css->rules[i];
-    if (selector_match(&rule_o->selector, query)) {
+    if (selector_match(&rule_o->selector, &rule.selector)) {
       for (int j = 0; j < rule_o->count; j++) {
         struct css_attr *attr = &rule_o->attrs[j];
         css_rule_apply_attr(&rule, attr);
@@ -260,17 +450,6 @@ struct css_rule css_select(struct css *css, char *query)
 
   return rule;
 
-}
-
-int index_of(char *str, char search)
-{
-  char *ptr;
-  ptr = strchr(str, search);
-  if (ptr == NULL) {
-    return -1;
-  }
-
-  return ptr - str;
 }
 
 char *css_substring(char *data, int *pos, char delimiter)
@@ -297,7 +476,12 @@ char *css_substring(char *data, int *pos, char delimiter)
 }
 
 void parse_selector(char *data, struct css_selector *selector){
-  selector->type = data;
+  log_debug("parsing selector '%s'\n", data);
+  selector->element = css_extract_element(data);
+  selector->pseudo_element = css_extract_pseudo_element(data);
+  selector->classes = css_extract_classes(data);
+  selector->pseudo_classes = css_extract_pseudo_classes(data);
+  selector->str_repr = data;
 }
 
 void rule_add_attr_v(struct css_rule *rule, char *name, char *value)
@@ -336,10 +520,12 @@ void rule_add_attr_v(struct css_rule *rule, char *name, char *value)
   size_t size_name = strlen(name) + 1;
   attr->name = xmalloc(sizeof(char) * size_name);
   strncpy(attr->name, name, size_name);
+  attr->name[size_name] = '\0';
 
   size_t size_value = strlen(value) + 1;
   attr->value = xmalloc(sizeof(char) * size_value);
   strncpy(attr->value, value, size_value);
+  attr->value[size_value] = '\0';
 
   rule->count++;
 }
@@ -355,9 +541,9 @@ void rule_add_attr(struct css_rule *rule, struct css_attr *attr)
     rule_add_attr_v(rule, "padding-right", value);
   } else if (str_equals(name, "caret")) {
     int index_space = index_of(value, ' ');
-    char *color = value + index_space + 1;
+    char *shape = value + index_space + 1;
     value[index_space] = '\0';
-    char *shape = value;
+    char *color = value;
 
     size_t color_name_size = strlen(name) + strlen("-color") + 1;
     char color_name [color_name_size];

@@ -1,7 +1,7 @@
 #ifndef ENGINE_H
 #define ENGINE_H
 
-#include "pango.h"
+#include "pango_css.h"
 
 #include <cairo/cairo.h>
 #include <uchar.h>
